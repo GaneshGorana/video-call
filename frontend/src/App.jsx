@@ -49,6 +49,7 @@ function App() {
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
+          console.log("user stream when calling : ", stream);
           userVideo.current.srcObject = stream;
           peerRef.current = Peer(peerConfig);
 
@@ -59,11 +60,13 @@ function App() {
             }
           };
 
-          stream
-            .getTracks()
-            .forEach((track) => peerRef.current.addTrack(track, stream));
+          stream.getTracks().forEach((track) => {
+            console.log("user - track when calling : ", track);
+            peerRef.current.addTrack(track, stream);
+          });
 
           peerRef.current.onicecandidate = (e) => {
+            console.log("ICE candidate when call:", e.candidate);
             if (e.candidate) {
               const payload = {
                 from: myMobile,
@@ -78,6 +81,7 @@ function App() {
             peerRef.current
               .createOffer()
               .then((offer) => {
+                console.log("Offer when calling : ", offer);
                 return peerRef.current.setLocalDescription(offer);
               })
               .then(() => {
@@ -91,6 +95,7 @@ function App() {
           };
 
           peerRef.current.ontrack = (e) => {
+            console.log("remote user1 - track when calling : ", e.streams[0]);
             remoteVideo.current.srcObject = e.streams[0];
           };
         })
@@ -103,6 +108,7 @@ function App() {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
+        console.log("user 2 stream when accepting call : ", stream);
         userVideo.current.srcObject = stream;
 
         peerRef.current = Peer(peerConfig);
@@ -113,9 +119,10 @@ function App() {
           }
         };
 
-        stream
-          .getTracks()
-          .forEach((track) => peerRef.current.addTrack(track, stream));
+        stream.getTracks().forEach((track) => {
+          console.log("user 2 - track when accepting call : ", track);
+          peerRef.current.addTrack(track, stream);
+        });
 
         const desc = new RTCSessionDescription(incomingOffer.sdp);
 
@@ -123,6 +130,10 @@ function App() {
           .setRemoteDescription(desc)
           .then(() => {
             pendingIceCandidates.forEach((candidate) => {
+              console.log(
+                "ice candidate of user 1 when accepting call : ",
+                candidate
+              );
               peerRef.current
                 .addIceCandidate(candidate)
                 .catch((e) => console.log(e));
@@ -144,6 +155,10 @@ function App() {
           });
 
         peerRef.current.onicecandidate = (e) => {
+          console.log(
+            "ICE candidate when accepting call , user 2:",
+            e.candidate
+          );
           if (e.candidate) {
             const payload = {
               from: myMobile,
@@ -155,6 +170,10 @@ function App() {
         };
 
         peerRef.current.ontrack = (e) => {
+          console.log(
+            "remote user2 - track when accepting call : ",
+            e.streams[0]
+          );
           remoteVideo.current.srcObject = e.streams[0];
         };
       });
