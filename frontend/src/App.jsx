@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { useSocket } from "../context/SocketProvider";
-import ReactPlayer from "react-player";
 import Peer from "./utils/Peer.js";
 
 function App() {
@@ -12,11 +11,11 @@ function App() {
   const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingOffer, setIncomingOffer] = useState(null);
 
-  // const userVideo = useRef(null);
-  // const remoteVideo = useRef(null);
+  const userVideo = useRef(null);
+  const remoteVideo = useRef(null);
 
-  const [userVideo, setUserVideo] = useState(null);
-  const [remoteVideo, setRemoteVideo] = useState(null);
+  // const [userVideo, setUserVideo] = useState(null);
+  // const [remoteVideo, setRemoteVideo] = useState(null);
 
   const peerRef = useRef(null);
   const [pendingIceCandidates, setPendingIceCandidates] = useState([]); //ice candidates array
@@ -50,9 +49,15 @@ function App() {
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
-          setUserVideo(stream);
-
+          userVideo.current.srcObject = stream;
           peerRef.current = Peer(peerConfig);
+
+          peerRef.current.onconnectionstatechange = (event) => {
+            console.log(event);
+            if (peerRef.current.connectionState === "connected") {
+              alert("Peers successfully connected!");
+            }
+          };
 
           stream
             .getTracks()
@@ -86,12 +91,7 @@ function App() {
           };
 
           peerRef.current.ontrack = (e) => {
-            setRemoteVideo(e.streams[0]);
-            remoteVideo.onloadedmetadata = () => {
-              remoteVideo
-                .play()
-                .catch((e) => console.error("Error playing video:", e));
-            };
+            remoteVideo.current.srcObject = e.streams[0];
           };
         })
         .catch((e) => console.log(e));
@@ -103,9 +103,15 @@ function App() {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
-        setUserVideo(stream);
+        userVideo.current.srcObject = stream;
 
         peerRef.current = Peer(peerConfig);
+        peerRef.current.onconnectionstatechange = (event) => {
+          console.log(event);
+          if (peerRef.current.connectionState === "connected") {
+            alert("Peers successfully connected!");
+          }
+        };
 
         stream
           .getTracks()
@@ -149,12 +155,7 @@ function App() {
         };
 
         peerRef.current.ontrack = (e) => {
-          setRemoteVideo(e.streams[0]);
-          remoteVideo.onloadedmetadata = () => {
-            remoteVideo
-              .play()
-              .catch((e) => console.error("Error playing video:", e));
-          };
+          remoteVideo.current.srcObject = e.streams[0];
         };
       });
   }, [
@@ -257,8 +258,16 @@ function App() {
           </div>
         )}
         <div className="mt-5 space-y-4">
-          <ReactPlayer playsinline controls url={userVideo} />
-          <ReactPlayer playsinline controls url={remoteVideo} />
+          <video
+            autoPlay
+            ref={userVideo}
+            className="w-full max-w-md rounded-md shadow-lg"
+          />
+          <video
+            autoPlay
+            ref={remoteVideo}
+            className="w-full max-w-md rounded-md shadow-lg"
+          />
         </div>
       </div>
     </>
