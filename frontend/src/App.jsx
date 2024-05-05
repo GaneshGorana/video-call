@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { useSocket } from "../context/SocketProvider";
+import ReactPlayer from "react-player";
 import Peer from "./utils/Peer.js";
 
 function App() {
@@ -11,8 +12,12 @@ function App() {
   const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingOffer, setIncomingOffer] = useState(null);
 
-  const userVideo = useRef(null);
-  const remoteVideo = useRef(null);
+  // const userVideo = useRef(null);
+  // const remoteVideo = useRef(null);
+
+  const [userVideo, setUserVideo] = useState(null);
+  const [remoteVideo, setRemoteVideo] = useState(null);
+
   const peerRef = useRef(null);
   const [pendingIceCandidates, setPendingIceCandidates] = useState([]); //ice candidates array
 
@@ -45,7 +50,7 @@ function App() {
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
-          userVideo.current.srcObject = stream;
+          setUserVideo(stream);
 
           peerRef.current = Peer(peerConfig);
 
@@ -81,9 +86,9 @@ function App() {
           };
 
           peerRef.current.ontrack = (e) => {
-            remoteVideo.current.srcObject = e.streams[0];
-            remoteVideo.current.onloadedmetadata = () => {
-              remoteVideo.current
+            setRemoteVideo(e.streams[0]);
+            remoteVideo.onloadedmetadata = () => {
+              remoteVideo
                 .play()
                 .catch((e) => console.error("Error playing video:", e));
             };
@@ -91,14 +96,14 @@ function App() {
         })
         .catch((e) => console.log(e));
     },
-    [myMobile, peerConfig, remoteMobile, socket]
+    [myMobile, peerConfig, remoteMobile, remoteVideo, socket]
   );
 
   const handleIncomingCallAccept = useCallback(() => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
-        userVideo.current.srcObject = stream;
+        setUserVideo(stream);
 
         peerRef.current = Peer(peerConfig);
 
@@ -144,15 +149,22 @@ function App() {
         };
 
         peerRef.current.ontrack = (e) => {
-          remoteVideo.current.srcObject = e.streams[0];
-          remoteVideo.current.onloadedmetadata = () => {
-            remoteVideo.current
+          setRemoteVideo(e.streams[0]);
+          remoteVideo.onloadedmetadata = () => {
+            remoteVideo
               .play()
               .catch((e) => console.error("Error playing video:", e));
           };
         };
       });
-  }, [incomingOffer, myMobile, peerConfig, pendingIceCandidates, socket]);
+  }, [
+    incomingOffer,
+    myMobile,
+    peerConfig,
+    pendingIceCandidates,
+    remoteVideo,
+    socket,
+  ]);
 
   useEffect(() => {
     socket.on("user-joined", (mb) => {
@@ -245,16 +257,8 @@ function App() {
           </div>
         )}
         <div className="mt-5 space-y-4">
-          <video
-            autoPlay
-            ref={userVideo}
-            className="w-full max-w-md rounded-md shadow-lg"
-          />
-          <video
-            autoPlay
-            ref={remoteVideo}
-            className="w-full max-w-md rounded-md shadow-lg"
-          />
+          <ReactPlayer playsinline controls url={userVideo} />
+          <ReactPlayer playsinline controls url={remoteVideo} />
         </div>
       </div>
     </>
