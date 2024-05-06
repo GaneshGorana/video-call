@@ -205,7 +205,9 @@ function App() {
     socket.on("ice-candidate", async (iceCandidate) => {
       const candidate = new RTCIceCandidate(iceCandidate);
       if (peerRef.current.remoteDescription) {
-        await peerRef.addIceCandidate(candidate).catch((e) => console.log(e));
+        await peerRef.current
+          .addIceCandidate(candidate)
+          .catch((e) => console.log(e));
       } else {
         setPendingIceCandidates((previous) => [...previous, candidate]);
       }
