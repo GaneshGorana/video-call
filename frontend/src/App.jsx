@@ -52,17 +52,12 @@ function App() {
     },
     [myMobile, socket]
   );
-
   useEffect(() => {
     peerRef.current = Peer(peerConfig);
 
     peerRef.current.oniceconnectionstatechange = (e) => {
       console.log("ICE connection state change : ", e);
     };
-
-    console.log("ice connection state : ", peerRef.current.iceConnectionState);
-
-    console.log("Connection state : ", peerRef.current.connectionState);
 
     peerRef.current.onicecandidate = (e) => {
       console.log("ICE candidate : ", e.candidate);
@@ -140,13 +135,13 @@ function App() {
 
         peerRef.current
           .setRemoteDescription(desc)
-          .then(async () => {
-            await pendingIceCandidates.forEach((candidate) => {
+          .then(() => {
+            pendingIceCandidates.forEach(async (candidate) => {
               console.log(
                 "ice candidate of user 1 when accepting call : ",
                 candidate
               );
-              peerRef.current
+              await peerRef.current
                 .addIceCandidate(candidate)
                 .catch((e) => console.log(e));
             });
