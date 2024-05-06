@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { useSocket } from "../context/SocketProvider";
 import Peer from "./utils/Peer.js";
+// eslint-disable-next-line no-unused-vars
+import adapter from "webrtc-adapter";
 
 function App() {
   const socket = useSocket();
@@ -40,6 +42,9 @@ function App() {
     []
   );
 
+  const p = new RTCPeerConnection(peerConfig);
+  p.iceConnectionState;
+  p.connectionState;
   const handleUserJoinRoom = useCallback(
     (e) => {
       e.preventDefault();
@@ -50,6 +55,14 @@ function App() {
 
   useEffect(() => {
     peerRef.current = Peer(peerConfig);
+
+    peerRef.current.oniceconnectionstatechange = (e) => {
+      console.log("ICE connection state change : ", e);
+    };
+
+    console.log("ice connection state : ", peerRef.current.iceConnectionState);
+
+    console.log("Connection state : ", peerRef.current.connectionState);
 
     peerRef.current.onicecandidate = (e) => {
       console.log("ICE candidate : ", e.candidate);
@@ -114,7 +127,7 @@ function App() {
   const handleIncomingCallAccept = useCallback(() => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
+      .then(async (stream) => {
         console.log("user 2 stream when accepting call : ", stream);
         userVideo.current.srcObject = stream;
 
@@ -127,8 +140,8 @@ function App() {
 
         peerRef.current
           .setRemoteDescription(desc)
-          .then(() => {
-            pendingIceCandidates.forEach((candidate) => {
+          .then(async () => {
+            await pendingIceCandidates.forEach((candidate) => {
               console.log(
                 "ice candidate of user 1 when accepting call : ",
                 candidate
@@ -181,19 +194,23 @@ function App() {
       setIsIncomingCall(true);
     });
 
-    socket.on("answer", (answer) => {
+    socket.on("answer", async (answer) => {
       const desc = new RTCSessionDescription(answer.sdp);
-      peerRef.current.setRemoteDescription(desc).catch((e) => console.log(e));
-      pendingIceCandidates.forEach((candidate) => {
-        peerRef.current.addIceCandidate(candidate).catch((e) => console.log(e));
+      await peerRef.current
+        .setRemoteDescription(desc)
+        .catch((e) => console.log(e));
+      pendingIceCandidates.forEach(async (candidate) => {
+        await peerRef.current
+          .addIceCandidate(candidate)
+          .catch((e) => console.log(e));
       });
       setPendingIceCandidates([]);
     });
 
-    socket.on("ice-candidate", (iceCandidate) => {
+    socket.on("ice-candidate", async (iceCandidate) => {
       const candidate = new RTCIceCandidate(iceCandidate);
       if (peerRef.remoteDescription) {
-        peerRef.addIceCandidate(candidate).catch((e) => console.log(e));
+        await peerRef.addIceCandidate(candidate).catch((e) => console.log(e));
       } else {
         setPendingIceCandidates((previous) => [...previous, candidate]);
       }
