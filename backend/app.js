@@ -27,6 +27,15 @@ io.on('connection', (socket) => {
         io.to(mb).emit('user-joined', mb);
     });
 
+    socket.on('call-user', (payload) => {
+        console.log('call-user payload : ', payload);
+        io.to(payload.from).emit('call-user', payload);
+    });
+
+    socket.on('call-received', (data) => {
+        io.to(data.target).emit('call-received', data);
+    });
+
     socket.on('offer', (payload) => {
         io.to(payload.target).emit('offer', payload);
     });
