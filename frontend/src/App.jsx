@@ -122,7 +122,7 @@ function App() {
   const handleIncomingCallAccept = useCallback(() => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
-      .then(async (stream) => {
+      .then((stream) => {
         console.log("user 2 stream when accepting call : ", stream);
         userVideo.current.srcObject = stream;
 
@@ -204,7 +204,7 @@ function App() {
 
     socket.on("ice-candidate", async (iceCandidate) => {
       const candidate = new RTCIceCandidate(iceCandidate);
-      if (peerRef.remoteDescription) {
+      if (peerRef.current.remoteDescription) {
         await peerRef.addIceCandidate(candidate).catch((e) => console.log(e));
       } else {
         setPendingIceCandidates((previous) => [...previous, candidate]);
