@@ -1,11 +1,5 @@
-// eslint-disable-next-line no-unused-vars
-import React, {
-  useState,
-  useCallback,
-  useEffect,
-  useRef,
-  useMemo,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import "./App.css";
 import { useSocket } from "../context/SocketProvider";
 import Peer from "./utils/Peer.js";
 // eslint-disable-next-line no-unused-vars
@@ -16,13 +10,16 @@ function VideoCall() {
 
   const [myMobile, setMyMobile] = useState("");
   const [remoteMobile, setRemoteMobile] = useState("");
+  const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingOffer, setIncomingOffer] = useState(null);
+
+  const [userMobile, setUserMobile] = useState("");
 
   const userVideo = useRef(null);
   const remoteVideo = useRef(null);
 
   const peerRef = useRef(null);
-  const [pendingIceCandidates, setPendingIceCandidates] = useState([]);
+  const [pendingIceCandidates, setPendingIceCandidates] = useState([]); //ice candidates array
 
   const peerConfig = useMemo(
     () => ({
@@ -31,13 +28,21 @@ function VideoCall() {
           urls: "stun:stun1.l.google.com:19302",
         },
         {
-          urls: "turn:numb.viagenie.ca",
+          url: "turn:numb.viagenie.ca",
           credential: "muazkh",
           username: "webrtc@live.com",
         },
       ],
     }),
     []
+  );
+
+  const handleUserJoinRoom = useCallback(
+    (e) => {
+      e.preventDefault();
+      socket.emit("join-room", myMobile);
+    },
+    [myMobile, socket]
   );
 
   useEffect(() => {
@@ -73,7 +78,9 @@ function VideoCall() {
   }, [incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
 
   const handleSendUserCall = useCallback(
-    (myMobile, remoteMobile) => {
+    (e) => {
+      e.preventDefault();
+
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
@@ -93,79 +100,71 @@ function VideoCall() {
             })
             .then(() => {
               const payload = {
-                from: myMobile,
                 target: remoteMobile,
+                from: myMobile,
                 sdp: peerRef.current.localDescription,
               };
               socket.emit("offer", payload);
-              console.log("Offer payload when calling : ", payload);
             });
         })
         .catch((e) => console.log(e));
     },
-    [socket]
+    [myMobile, remoteMobile, socket]
   );
 
-  const handleIncomingCallAccept = useCallback(
-    (myMobile, remoteMobile, offer) => {
-      navigator.mediaDevices
-        .getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          console.log("user 2 stream when accepting call : ", stream);
-          userVideo.current.srcObject = stream;
+  const handleIncomingCallAccept = useCallback(() => {
+    navigator.mediaDevices
+      .getUserMedia({ video: true, audio: true })
+      .then((stream) => {
+        console.log("user 2 stream when accepting call : ", stream);
+        userVideo.current.srcObject = stream;
 
-          stream.getTracks().forEach((track) => {
-            console.log("user 2 - track when accepting call : ", track);
-            peerRef.current.addTrack(track, stream);
-          });
-
-          const desc = new RTCSessionDescription(offer);
-
-          peerRef.current
-            .setRemoteDescription(desc)
-            .then(() => {
-              pendingIceCandidates.forEach(async (candidate) => {
-                console.log(
-                  "ice candidate of user 1 when accepting call : ",
-                  candidate
-                );
-                await peerRef.current
-                  .addIceCandidate(candidate)
-                  .catch((e) => console.log(e));
-              });
-            })
-            .then(() => {
-              return peerRef.current.createAnswer();
-            })
-            .then((answer) => {
-              return peerRef.current.setLocalDescription(answer);
-            })
-            .then(() => {
-              const payload = {
-                target: remoteMobile,
-                from: myMobile,
-                sdp: peerRef.current.localDescription,
-              };
-              socket.emit("answer", payload);
-            });
+        stream.getTracks().forEach((track) => {
+          console.log("user 2 - track when accepting call : ", track);
+          peerRef.current.addTrack(track, stream);
         });
-    },
-    [pendingIceCandidates, socket]
-  );
+
+        const desc = new RTCSessionDescription(incomingOffer.sdp);
+
+        peerRef.current
+          .setRemoteDescription(desc)
+          .then(() => {
+            pendingIceCandidates.forEach(async (candidate) => {
+              console.log(
+                "ice candidate of user 1 when accepting call : ",
+                candidate
+              );
+              await peerRef.current
+                .addIceCandidate(candidate)
+                .catch((e) => console.log(e));
+            });
+          })
+          .then(() => {
+            return peerRef.current.createAnswer();
+          })
+          .then((answer) => {
+            return peerRef.current.setLocalDescription(answer);
+          })
+          .then(() => {
+            const payload = {
+              target: incomingOffer.from,
+              from: myMobile,
+              sdp: peerRef.current.localDescription,
+            };
+            socket.emit("answer", payload);
+          });
+      });
+  }, [incomingOffer, myMobile, pendingIceCandidates, socket]);
 
   useEffect(() => {
-    socket.on("call-user", (data) => {
-      console.log("call-user data : ", data);
-      setMyMobile(data.from);
-      setRemoteMobile(data.target);
-      handleSendUserCall(data.from, data.target);
+    socket.on("user-joined", (mb) => {
+      setUserMobile(mb);
+      console.log("user joined : ", mb);
     });
 
-    socket.on("call-received", (data) => {
-      setMyMobile(data.target);
-      setRemoteMobile(data.from);
-      setIncomingOffer(data);
-      handleIncomingCallAccept(data.target, data.from, data.sdp);
+    socket.on("offer", (offer) => {
+      setIncomingOffer(offer);
+      setIsIncomingCall(true);
     });
 
     socket.on("answer", async (answer) => {
@@ -174,7 +173,6 @@ function VideoCall() {
         .setRemoteDescription(desc)
         .catch((e) => console.log(e));
       pendingIceCandidates.forEach(async (candidate) => {
-        console.log("ice candidate when receiving answer : ", candidate);
         await peerRef.current
           .addIceCandidate(candidate)
           .catch((e) => console.log(e));
@@ -184,7 +182,6 @@ function VideoCall() {
 
     socket.on("ice-candidate", async (iceCandidate) => {
       const candidate = new RTCIceCandidate(iceCandidate);
-      console.log("ice candidate when receiving : ", candidate);
       if (peerRef.current.remoteDescription) {
         await peerRef.current
           .addIceCandidate(candidate)
@@ -195,36 +192,98 @@ function VideoCall() {
     });
 
     return () => {
-      socket.off("call-user");
-      socket.off("call-received");
+      socket.off("user-joined");
       socket.off("offer");
       socket.off("answer");
       socket.off("ice-candidate");
     };
-  }, [
-    handleIncomingCallAccept,
-    handleSendUserCall,
-    myMobile,
-    pendingIceCandidates,
-    remoteMobile,
-    socket,
-  ]);
+  }, [pendingIceCandidates, socket]);
 
   return (
-    <div className="w-full  p-6 m-3 bg-white rounded shadow-md">
-      <video
-        autoPlay
-        ref={userVideo}
-        width={1080}
-        height={720}
-        className=" rounded shadow-lg object-cover"
-      />
-      <video
-        autoPlay
-        ref={remoteVideo}
-        className="w-full mt-4 rounded shadow-lg object-cover"
-      />
-    </div>
+    <>
+      <div
+        id="videocal-section"
+        className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4 sm:px-6 lg:px-8"
+      >
+        <form
+          onSubmit={handleUserJoinRoom}
+          className="w-full p-6 m-3 bg-white rounded shadow-md"
+        >
+          <label
+            htmlFor="mymb"
+            className="block mb-2 text-sm font-bold text-gray-700"
+          >
+            Your mobile number
+          </label>
+          <input
+            type="number"
+            id="mymb"
+            value={myMobile}
+            onChange={(e) => setMyMobile(e.target.value)}
+            className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
+          />
+          <button
+            type="submit"
+            className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+          >
+            Join
+          </button>
+        </form>
+        <form
+          onSubmit={handleSendUserCall}
+          className="w-full p-6 m-3 bg-white rounded shadow-md"
+        >
+          <label
+            htmlFor="remotemb"
+            className="block mb-2 text-sm font-bold text-gray-700"
+          >
+            Friend mobile number
+          </label>
+          <input
+            type="number"
+            id="remotemb"
+            value={remoteMobile}
+            onChange={(e) => setRemoteMobile(e.target.value)}
+            className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
+          />
+          <button className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out">
+            Call
+          </button>
+        </form>
+        {userMobile && (
+          <h1 className="m-3 text-lg font-medium text-gray-700">
+            User joined : {userMobile}
+          </h1>
+        )}
+        {isIncomingCall && (
+          <div className="w-full p-6 m-3 bg-white rounded shadow-md">
+            <h1 className="mb-2 text-lg font-medium text-gray-700">
+              Incoming Call from : {incomingOffer.from}{" "}
+            </h1>
+            <button
+              onClick={handleIncomingCallAccept}
+              className="w-full px-4 py-2 font-bold text-white bg-green-500 rounded-full hover:bg-green-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+            >
+              Accept
+            </button>
+          </div>
+        )}
+        <div className="w-full  p-6 m-3  rounded ">
+          <video
+            autoPlay
+            ref={userVideo}
+            width={1080}
+            height={720}
+            className=" rounded  object-cover"
+          />
+          <video
+            autoPlay
+            ref={remoteVideo}
+            className="w-full mt-4 rounded object-cover"
+          />
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -6,14 +6,13 @@ import {
   createBrowserRouter,
   createRoutesFromElements,
 } from "react-router-dom";
-import VideoCall from "./VideoCall.jsx";
-import Home from "./Home.jsx";
+import DefaultPage from "./DefaultPage.jsx";
+
 function App() {
   const router = createBrowserRouter(
     createRoutesFromElements(
       <>
-        <Route path="/" element={<Home />}></Route>
-        <Route path="/user/:id" element={<VideoCall />}></Route>
+        <Route path="/" element={<DefaultPage />}></Route>
       </>
     )
   );
