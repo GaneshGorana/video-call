@@ -31,7 +31,7 @@ function VideoCall() {
           urls: "stun:stun1.l.google.com:19302",
         },
         {
-          url: "turn:numb.viagenie.ca",
+          urls: "turn:numb.viagenie.ca",
           credential: "muazkh",
           username: "webrtc@live.com",
         },
@@ -174,6 +174,7 @@ function VideoCall() {
         .setRemoteDescription(desc)
         .catch((e) => console.log(e));
       pendingIceCandidates.forEach(async (candidate) => {
+        console.log("ice candidate when receiving answer : ", candidate);
         await peerRef.current
           .addIceCandidate(candidate)
           .catch((e) => console.log(e));
@@ -183,6 +184,7 @@ function VideoCall() {
 
     socket.on("ice-candidate", async (iceCandidate) => {
       const candidate = new RTCIceCandidate(iceCandidate);
+      console.log("ice candidate when receiving : ", candidate);
       if (peerRef.current.remoteDescription) {
         await peerRef.current
           .addIceCandidate(candidate)
