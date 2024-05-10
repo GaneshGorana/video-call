@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import { useSocket } from "../context/SocketProvider";
 import Peer from "./utils/Peer.js";
+import PropTypes from "prop-types";
+import BottomBar from "./BottomBar.jsx";
 // eslint-disable-next-line no-unused-vars
 import adapter from "webrtc-adapter";
 
-function VideoCall() {
+function VideoCall({ callActive, setCallActive }) {
   const socket = useSocket();
 
   const [myMobile, setMyMobile] = useState("");
@@ -14,6 +16,15 @@ function VideoCall() {
   const [incomingOffer, setIncomingOffer] = useState(null);
 
   const [userMobile, setUserMobile] = useState("");
+
+  const activeCall = useCallback(() => {
+    setCallActive(true);
+  }, [setCallActive]);
+
+  const endCall = useCallback(() => {
+    setCallActive(false);
+    window.location.reload();
+  }, [setCallActive]);
 
   const userVideo = useRef(null);
   const remoteVideo = useRef(null);
@@ -72,10 +83,11 @@ function VideoCall() {
     peerRef.current.onconnectionstatechange = (event) => {
       console.log(event);
       if (peerRef.current.connectionState === "connected") {
-        alert("Peers successfully connected!");
+        console.log("Peers successfully connected!");
+        activeCall();
       }
     };
-  }, [incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
+  }, [activeCall, incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
 
   const handleSendUserCall = useCallback(
     (e) => {
@@ -201,90 +213,106 @@ function VideoCall() {
 
   return (
     <>
-      <div
-        id="videocal-section"
-        className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4 sm:px-6 lg:px-8"
-      >
-        <form
-          onSubmit={handleUserJoinRoom}
-          className="w-full p-6 m-3 bg-white rounded shadow-md"
+      {callActive != true ? (
+        <div
+          id="videocal-section"
+          className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4 sm:px-6 lg:px-8"
         >
-          <label
-            htmlFor="mymb"
-            className="block mb-2 text-sm font-bold text-gray-700"
+          <form
+            onSubmit={handleUserJoinRoom}
+            className="w-full p-6 m-3 bg-white rounded shadow-md"
           >
-            Your mobile number
-          </label>
-          <input
-            type="number"
-            id="mymb"
-            value={myMobile}
-            onChange={(e) => setMyMobile(e.target.value)}
-            className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
-          />
-          <button
-            type="submit"
-            className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
-          >
-            Join
-          </button>
-        </form>
-        <form
-          onSubmit={handleSendUserCall}
-          className="w-full p-6 m-3 bg-white rounded shadow-md"
-        >
-          <label
-            htmlFor="remotemb"
-            className="block mb-2 text-sm font-bold text-gray-700"
-          >
-            Friend mobile number
-          </label>
-          <input
-            type="number"
-            id="remotemb"
-            value={remoteMobile}
-            onChange={(e) => setRemoteMobile(e.target.value)}
-            className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
-          />
-          <button className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out">
-            Call
-          </button>
-        </form>
-        {userMobile && (
-          <h1 className="m-3 text-lg font-medium text-gray-700">
-            User joined : {userMobile}
-          </h1>
-        )}
-        {isIncomingCall && (
-          <div className="w-full p-6 m-3 bg-white rounded shadow-md">
-            <h1 className="mb-2 text-lg font-medium text-gray-700">
-              Incoming Call from : {incomingOffer.from}{" "}
-            </h1>
-            <button
-              onClick={handleIncomingCallAccept}
-              className="w-full px-4 py-2 font-bold text-white bg-green-500 rounded-full hover:bg-green-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+            <label
+              htmlFor="mymb"
+              className="block mb-2 text-sm font-bold text-gray-700"
             >
-              Accept
+              Your mobile number
+            </label>
+            <input
+              type="number"
+              id="mymb"
+              value={myMobile}
+              onChange={(e) => setMyMobile(e.target.value)}
+              className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
+            />
+            <button
+              type="submit"
+              className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+            >
+              Join
             </button>
-          </div>
-        )}
-        <div className="w-full  p-6 m-3  rounded ">
-          <video
-            autoPlay
-            ref={userVideo}
-            width={1080}
-            height={720}
-            className=" rounded  object-cover"
-          />
-          <video
-            autoPlay
-            ref={remoteVideo}
-            className="w-full mt-4 rounded object-cover"
-          />
+          </form>
+          <form
+            onSubmit={handleSendUserCall}
+            className="w-full p-6 m-3 bg-white rounded shadow-md"
+          >
+            <label
+              htmlFor="remotemb"
+              className="block mb-2 text-sm font-bold text-gray-700"
+            >
+              Friend mobile number
+            </label>
+            <input
+              type="number"
+              id="remotemb"
+              value={remoteMobile}
+              onChange={(e) => setRemoteMobile(e.target.value)}
+              className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
+            />
+            <button className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out">
+              Call
+            </button>
+          </form>
+          {userMobile && (
+            <h1 className="m-3 text-lg font-medium text-gray-700">
+              User joined : {userMobile}
+            </h1>
+          )}
+          {isIncomingCall && (
+            <div className="w-full p-6 m-3 bg-white rounded shadow-md">
+              <h1 className="mb-2 text-lg font-medium text-gray-700">
+                Incoming Call from : {incomingOffer.from}{" "}
+              </h1>
+              <button
+                onClick={handleIncomingCallAccept}
+                className="w-full px-4 py-2 font-bold text-white bg-green-500 rounded-full hover:bg-green-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+              >
+                Accept
+              </button>
+            </div>
+          )}
         </div>
+      ) : (
+        <></>
+      )}
+      <div className={`videoCall-box relative w-full h-screen`}>
+        <video
+          autoPlay
+          ref={remoteVideo}
+          className={`absolute transition-all duration-1000 object-cover ${
+            callActive ? "w-full h-[95vh]" : "w-0 h-0"
+          }`}
+          id="remote-video"
+        />
+        <video
+          autoPlay
+          ref={userVideo}
+          className={`p-6 transition-all duration-1000 absolute  ${
+            callActive
+              ? "bottom-16 right-4 w-4/12 h-4/12"
+              : "aspect-[16/9] w-2/3"
+          } object-cover rounded`}
+          id="user-video"
+        />
+        {callActive && <BottomBar onEnd={endCall} />}
       </div>
     </>
   );
 }
+
+VideoCall.propTypes = {
+  callActive: PropTypes.bool.isRequired,
+  setCallActive: PropTypes.func.isRequired,
+};
 
 export default VideoCall;
