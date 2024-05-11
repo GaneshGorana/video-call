@@ -218,6 +218,8 @@ function VideoCall({ callActive, setCallActive }) {
   const audioInputRef = useRef();
   const videoInputRef = useRef();
 
+  const [currentDeviceId, setCurrentDeviceId] = useState("");
+
   const handleMenuClick = () => {
     setMenuOpen(!menuOpen);
   };
@@ -280,7 +282,7 @@ function VideoCall({ callActive, setCallActive }) {
       const audioTracks = userVideo.current.srcObject.getAudioTracks();
 
       if (audioTracks.length > 0) {
-        audioTracks[0].enabled = !micMuted;
+        audioTracks[0].enabled = micMuted;
       }
     } catch (error) {
       console.log(error);
@@ -290,16 +292,35 @@ function VideoCall({ callActive, setCallActive }) {
   const handleSwitchCamera = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(
+        (device) => device.kind === "videoinput"
+      );
 
-      devices.forEach((d) => {
-        if (d.kind === "videoinput") {
-          console.log(d.deviceId);
-        }
-      });
+      // If there are multiple video devices, switch to the next one
+      if (videoDevices.length > 1) {
+        const currentIndex = videoDevices.findIndex(
+          (device) => device.deviceId === currentDeviceId
+        );
+        const nextIndex = (currentIndex + 1) % videoDevices.length;
+        const nextDeviceId = videoDevices[nextIndex].deviceId;
+
+        setCurrentDeviceId(nextDeviceId);
+
+        // Stop all video tracks
+        const stream = userVideo.current.srcObject;
+        stream.getVideoTracks().forEach((track) => track.stop());
+
+        // Start the new video track
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: nextDeviceId },
+          audio: true,
+        });
+        userVideo.current.srcObject = newStream;
+      }
     } catch (error) {
       console.log(error);
     }
-  }, []);
+  }, [currentDeviceId]);
 
   return (
     <>
@@ -403,7 +424,7 @@ function VideoCall({ callActive, setCallActive }) {
                 className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
                 title="Mic Toggle"
               >
-                {micMuted ? (
+                {!micMuted ? (
                   <XIcon className="h-6 w-6" />
                 ) : (
                   <MicrophoneIcon className="h-6 w-6" />
