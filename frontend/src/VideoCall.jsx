@@ -68,12 +68,7 @@ function VideoCall({ callActive, setCallActive }) {
   useEffect(() => {
     peerRef.current = Peer(peerConfig);
 
-    peerRef.current.oniceconnectionstatechange = (e) => {
-      console.log("ICE connection state change : ", e);
-    };
-
     peerRef.current.onicecandidate = (e) => {
-      console.log("ICE candidate : ", e.candidate);
       if (e.candidate) {
         const payload = {
           from: myMobile,
@@ -85,14 +80,14 @@ function VideoCall({ callActive, setCallActive }) {
     };
 
     peerRef.current.ontrack = (e) => {
-      console.log("remote user - track adding : ", e.streams[0]);
       remoteVideo.current.srcObject = e.streams[0];
     };
 
     peerRef.current.onconnectionstatechange = (event) => {
-      console.log(event);
       if (peerRef.current.connectionState === "connected") {
         console.log("Peers successfully connected!");
+      } else {
+        console.log("Peers connection failed!", event.target.connectionState);
       }
     };
   }, [activeCall, incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
@@ -105,18 +100,15 @@ function VideoCall({ callActive, setCallActive }) {
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
           activeCall();
-          console.log("user stream when calling : ", stream);
           userVideo.current.srcObject = stream;
 
           stream.getTracks().forEach((track) => {
-            console.log("user - track when calling : ", track);
             peerRef.current.addTrack(track, stream);
           });
 
           peerRef.current
             .createOffer()
             .then((offer) => {
-              console.log("Offer when calling : ", offer);
               return peerRef.current.setLocalDescription(offer);
             })
             .then(() => {
@@ -137,11 +129,10 @@ function VideoCall({ callActive, setCallActive }) {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
-        console.log("user 2 stream when accepting call : ", stream);
+        activeCall();
         userVideo.current.srcObject = stream;
 
         stream.getTracks().forEach((track) => {
-          console.log("user 2 - track when accepting call : ", track);
           peerRef.current.addTrack(track, stream);
         });
 
@@ -151,10 +142,6 @@ function VideoCall({ callActive, setCallActive }) {
           .setRemoteDescription(desc)
           .then(() => {
             pendingIceCandidates.forEach(async (candidate) => {
-              console.log(
-                "ice candidate of user 1 when accepting call : ",
-                candidate
-              );
               await peerRef.current
                 .addIceCandidate(candidate)
                 .catch((e) => console.log(e));
@@ -175,7 +162,7 @@ function VideoCall({ callActive, setCallActive }) {
             socket.emit("answer", payload);
           });
       });
-  }, [incomingOffer, myMobile, pendingIceCandidates, socket]);
+  }, [activeCall, incomingOffer, myMobile, pendingIceCandidates, socket]);
 
   useEffect(() => {
     socket.on("user-joined", (mb) => {
