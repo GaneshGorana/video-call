@@ -261,6 +261,46 @@ function VideoCall({ callActive, setCallActive }) {
     }
   }
 
+  const handleVideoToggle = useCallback(() => {
+    try {
+      setCameraOff(!cameraOff);
+      const videoTracks = userVideo.current.srcObject.getVideoTracks();
+
+      if (videoTracks.length > 0) {
+        videoTracks[0].enabled = cameraOff;
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }, [cameraOff]);
+
+  const handleMicToggle = useCallback(() => {
+    try {
+      setMicMuted(!micMuted);
+      const audioTracks = userVideo.current.srcObject.getAudioTracks();
+
+      if (audioTracks.length > 0) {
+        audioTracks[0].enabled = !micMuted;
+      }
+    } catch (error) {
+      console.log(error);
+    }
+  }, [micMuted]);
+
+  const handleSwitchCamera = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+
+      devices.forEach((d) => {
+        if (d.kind === "videoinput") {
+          console.log(d.deviceId);
+        }
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
+
   return (
     <>
       {callActive != true ? (
@@ -359,7 +399,7 @@ function VideoCall({ callActive, setCallActive }) {
           <>
             <div className="fixed bottom-0 w-full flex justify-around items-center p-4 bg-gray-800 text-white shadow-md sm:flex-row">
               <button
-                onClick={() => setMicMuted(!micMuted)}
+                onClick={() => handleMicToggle()}
                 className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
                 title="Mic Toggle"
               >
@@ -370,6 +410,7 @@ function VideoCall({ callActive, setCallActive }) {
                 )}
               </button>
               <button
+                onClick={handleSwitchCamera}
                 className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
                 title="Switch Camera"
               >
@@ -383,11 +424,11 @@ function VideoCall({ callActive, setCallActive }) {
                 <PhoneIcon className="h-6 w-6" />
               </button>
               <button
-                onClick={() => setCameraOff(!cameraOff)}
+                onClick={() => handleVideoToggle()}
                 className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
                 title="Camera Toggle"
               >
-                {cameraOff ? (
+                {!cameraOff ? (
                   <XIcon className="h-6 w-6" />
                 ) : (
                   <VideoCameraIcon className="h-6 w-6" />
