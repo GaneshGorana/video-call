@@ -1,0 +1,31 @@
+.video-wrapper {
+  object-fit: cover;
+}
+
+.video-active {
+  position: fixed;
+  bottom: 4.6rem;
+  right: 0.2rem;
+  width: 40%;
+  height: 30%;
+}
+
+@media (min-width: 640px) {
+  .video-active {
+    width: 40%;
+    height: 35%;
+  }
+}
+
+@media (min-width: 1024px) {
+  .video-active {
+    width: 35%;
+    height: 38%;
+  }
+}
+
+.user-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

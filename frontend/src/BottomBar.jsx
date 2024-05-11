@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useEffect, useState, useRef } from "react";
 import {
   CameraIcon,
   MicrophoneIcon,
@@ -16,6 +16,9 @@ const BottomBar = ({ onEnd }) => {
   const [videoOption, setVideoOption] = useState("default");
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const audioInputRef = useRef();
+  const videoInputRef = useRef();
+
   const handleMenuClick = () => {
     setMenuOpen(!menuOpen);
   };
@@ -25,12 +28,31 @@ const BottomBar = ({ onEnd }) => {
   };
 
   const handleMenuItemClick = (e) => {
-    e.stopPropagation(); // Prevent menu close when clicking inside menu
+    e.stopPropagation();
   };
 
   const endCall = useCallback(() => {
     onEnd();
   }, [onEnd]);
+
+  useEffect(() => {
+    async function devices() {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+
+        devices.forEach((d) => {
+          const option = document.createElement("option");
+          option.value = d.deviceId;
+          option.text = d.label;
+
+          audioInputRef.current.appendChild(option);
+        });
+      } catch (error) {
+        console.log(error);
+      }
+    }
+    devices();
+  }, []);
 
   return (
     <div className="fixed bottom-0 w-full flex justify-around items-center p-4 bg-gray-800 text-white shadow-md sm:flex-row">
@@ -95,58 +117,22 @@ const BottomBar = ({ onEnd }) => {
                 </button>
                 <ul className="space-y-2 text-black">
                   <li>
-                    <p className="font-bold">Audio</p>
-                    <ul className="ml-4 space-y-1">
-                      <li>
-                        <label className="flex items-center cursor-pointer">
-                          <input
-                            type="radio"
-                            name="audio"
-                            checked={audioOption === "default"}
-                            onChange={() => setAudioOption("default")}
-                          />
-                          <span className="ml-2">Default</span>
-                        </label>
-                      </li>
-                      <li>
-                        <label className="flex items-center cursor-pointer">
-                          <input
-                            type="radio"
-                            name="audio"
-                            checked={audioOption === "speaker"}
-                            onChange={() => setAudioOption("speaker")}
-                          />
-                          <span className="ml-2">Speaker</span>
-                        </label>
-                      </li>
-                    </ul>
+                    <p className="font-bold">Audio Input</p>
+                    <select
+                      ref={audioInputRef}
+                      id="audioInput"
+                      value={audioOption}
+                      onChange={(e) => setAudioOption(e.target.value)}
+                    ></select>
                   </li>
                   <li>
-                    <p className="font-bold">Video</p>
-                    <ul className="ml-4 space-y-1">
-                      <li>
-                        <label className="flex items-center cursor-pointer">
-                          <input
-                            type="radio"
-                            name="video"
-                            checked={videoOption === "default"}
-                            onChange={() => setVideoOption("default")}
-                          />
-                          <span className="ml-2">Default</span>
-                        </label>
-                      </li>
-                      <li>
-                        <label className="flex items-center cursor-pointer">
-                          <input
-                            type="radio"
-                            name="video"
-                            checked={videoOption === "camera"}
-                            onChange={() => setVideoOption("camera")}
-                          />
-                          <span className="ml-2">Camera</span>
-                        </label>
-                      </li>
-                    </ul>
+                    <p className="font-bold">Video Input</p>
+                    <select
+                      ref={videoInputRef}
+                      id="videoInput"
+                      value={videoOption}
+                      onChange={(e) => setVideoOption(e.target.value)}
+                    ></select>
                   </li>
                 </ul>
               </div>

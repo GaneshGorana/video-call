@@ -3,7 +3,16 @@ import "./App.css";
 import { useSocket } from "../context/SocketProvider";
 import Peer from "./utils/Peer.js";
 import PropTypes from "prop-types";
-import BottomBar from "./BottomBar.jsx";
+import "./Video.css";
+// BottomBar code
+import {
+  CameraIcon,
+  MicrophoneIcon,
+  PhoneIcon,
+  VideoCameraIcon,
+  MenuIcon,
+  XIcon,
+} from "@heroicons/react/solid";
 // eslint-disable-next-line no-unused-vars
 import adapter from "webrtc-adapter";
 
@@ -84,7 +93,6 @@ function VideoCall({ callActive, setCallActive }) {
       console.log(event);
       if (peerRef.current.connectionState === "connected") {
         console.log("Peers successfully connected!");
-        activeCall();
       }
     };
   }, [activeCall, incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
@@ -96,6 +104,7 @@ function VideoCall({ callActive, setCallActive }) {
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
         .then((stream) => {
+          activeCall();
           console.log("user stream when calling : ", stream);
           userVideo.current.srcObject = stream;
 
@@ -121,7 +130,7 @@ function VideoCall({ callActive, setCallActive }) {
         })
         .catch((e) => console.log(e));
     },
-    [myMobile, remoteMobile, socket]
+    [activeCall, myMobile, remoteMobile, socket]
   );
 
   const handleIncomingCallAccept = useCallback(() => {
@@ -211,6 +220,60 @@ function VideoCall({ callActive, setCallActive }) {
     };
   }, [pendingIceCandidates, socket]);
 
+  // BottomBar code
+
+  const [micMuted, setMicMuted] = useState(false);
+  const [cameraOff, setCameraOff] = useState(false);
+  const [audioOption, setAudioOption] = useState("default");
+  const [videoOption, setVideoOption] = useState("default");
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const audioInputRef = useRef();
+  const videoInputRef = useRef();
+
+  const handleMenuClick = () => {
+    setMenuOpen(!menuOpen);
+  };
+
+  const handleCloseClick = () => {
+    setMenuOpen(false);
+  };
+
+  const handleMenuItemClick = (e) => {
+    e.stopPropagation();
+  };
+
+  useEffect(() => {
+    if (callActive && menuOpen) {
+      devices();
+    }
+  }, [callActive, menuOpen]);
+
+  async function devices() {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+
+      // Clear existing options
+      audioInputRef.current.innerHTML = "";
+      videoInputRef.current.innerHTML = "";
+
+      devices.forEach((d) => {
+        const option = document.createElement("option");
+        option.classList.add("w-full", "p-2", "rounded", "border");
+        option.value = d.deviceId;
+        option.text = d.label || d.deviceId; // Use deviceId as fallback if label is not available
+
+        if (d.kind === "audioinput" && audioInputRef.current) {
+          audioInputRef.current.appendChild(option);
+        } else if (d.kind === "videoinput" && videoInputRef.current) {
+          videoInputRef.current.appendChild(option);
+        }
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
   return (
     <>
       {callActive != true ? (
@@ -294,17 +357,112 @@ function VideoCall({ callActive, setCallActive }) {
           }`}
           id="remote-video"
         />
-        <video
-          autoPlay
-          ref={userVideo}
-          className={`p-6 transition-all duration-1000 absolute  ${
-            callActive
-              ? "bottom-16 right-4 w-4/12 h-4/12"
-              : "aspect-[16/9] w-2/3"
-          } object-cover rounded`}
-          id="user-video"
-        />
-        {callActive && <BottomBar onEnd={endCall} />}
+        <div className={`video-wrapper ${callActive ? "video-active" : ""}`}>
+          <video
+            autoPlay
+            ref={userVideo}
+            className="user-video"
+            id="user-video"
+          />
+        </div>
+
+        {/* this is BottomBar of call */}
+
+        {callActive && (
+          <>
+            <div className="fixed bottom-0 w-full flex justify-around items-center p-4 bg-gray-800 text-white shadow-md sm:flex-row">
+              <button
+                onClick={() => setMicMuted(!micMuted)}
+                className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
+                title="Mic Toggle"
+              >
+                {micMuted ? (
+                  <XIcon className="h-6 w-6" />
+                ) : (
+                  <MicrophoneIcon className="h-6 w-6" />
+                )}
+              </button>
+              <button
+                className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
+                title="Switch Camera"
+              >
+                <CameraIcon className="h-6 w-6" />
+              </button>
+              <button
+                onClick={endCall}
+                className="p-2 rounded-full bg-red-600 hover:bg-red-500"
+                title="End Call"
+              >
+                <PhoneIcon className="h-6 w-6" />
+              </button>
+              <button
+                onClick={() => setCameraOff(!cameraOff)}
+                className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
+                title="Camera Toggle"
+              >
+                {cameraOff ? (
+                  <XIcon className="h-6 w-6" />
+                ) : (
+                  <VideoCameraIcon className="h-6 w-6" />
+                )}
+              </button>
+              <div className="relative">
+                <button
+                  onClick={handleMenuClick}
+                  className="p-2 rounded bg-blue-500 text-white"
+                  title="Settings"
+                >
+                  <MenuIcon className="h-6 w-6" />
+                </button>
+
+                {menuOpen && (
+                  <div
+                    onClick={handleCloseClick}
+                    className="fixed inset-0 z-10"
+                  >
+                    <div className="absolute inset-0 bg-black opacity-50"></div>
+                    <div className="fixed inset-0 flex items-center justify-center z-20">
+                      <div
+                        className="bg-white p-4 rounded shadow-lg w-full sm:w-80 max-w-xs relative overflow-auto max-h-60"
+                        onClick={handleMenuItemClick}
+                      >
+                        <button
+                          onClick={handleCloseClick}
+                          className="absolute top-0 right-0 p-2"
+                          title="Close"
+                        >
+                          <XIcon className="h-6 w-6 text-black" />
+                        </button>
+                        <ul className="space-y-2 text-black">
+                          <li>
+                            <p className="font-bold">Audio Input</p>
+                            <select
+                              className="w-full p-2 rounded border"
+                              ref={audioInputRef}
+                              id="audioInput"
+                              value={audioOption}
+                              onChange={(e) => setAudioOption(e.target.value)}
+                            ></select>
+                          </li>
+                          <li>
+                            <p className="font-bold">Video Input</p>
+                            <select
+                              className="w-full p-2 rounded border"
+                              ref={videoInputRef}
+                              id="videoInput"
+                              value={videoOption}
+                              onChange={(e) => setVideoOption(e.target.value)}
+                            ></select>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   );
