@@ -22,9 +22,13 @@ function VideoCall({ callActive, setCallActive }) {
   const [myMobile, setMyMobile] = useState("");
   const [remoteMobile, setRemoteMobile] = useState("");
   const [isIncomingCall, setIsIncomingCall] = useState(false);
-  const [incomingOffer, setIncomingOffer] = useState(null);
+  const [incomingOffer, setIncomingOffer] = useState([]);
 
   const [userMobile, setUserMobile] = useState("");
+  // eslint-disable-next-line no-unused-vars
+  let [stream, setStream] = useState({});
+
+  const [callAnswered, setCallAnswered] = useState(false);
 
   const activeCall = useCallback(() => {
     setCallActive(true);
@@ -92,77 +96,102 @@ function VideoCall({ callActive, setCallActive }) {
     };
   }, [activeCall, incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
 
-  const handleSendUserCall = useCallback(
-    (e) => {
-      e.preventDefault();
+  const getUserMedia = useCallback(async () => {
+    try {
+      const strm = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      setStream(strm);
+      return strm;
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
 
-      navigator.mediaDevices
-        .getUserMedia({ video: true, audio: true })
-        .then((stream) => {
-          activeCall();
-          userVideo.current.srcObject = stream;
+  const sendCall = useCallback(
+    async (stream) => {
+      activeCall();
+      userVideo.current.srcObject = stream;
 
-          stream.getTracks().forEach((track) => {
-            peerRef.current.addTrack(track, stream);
-          });
-
-          peerRef.current
-            .createOffer()
-            .then((offer) => {
-              return peerRef.current.setLocalDescription(offer);
-            })
-            .then(() => {
-              const payload = {
-                target: remoteMobile,
-                from: myMobile,
-                sdp: peerRef.current.localDescription,
-              };
-              socket.emit("offer", payload);
-            });
+      stream.getTracks().forEach((track) => {
+        console.log("stream when normal : ", track);
+        peerRef.current.addTrack(track, stream);
+      });
+      peerRef.current
+        .createOffer()
+        .then((offer) => {
+          console.log("offer normal : ", offer);
+          return peerRef.current.setLocalDescription(offer);
         })
-        .catch((e) => console.log(e));
+        .then(() => {
+          const payload = {
+            target: remoteMobile,
+            from: myMobile,
+            sdp: peerRef.current.localDescription,
+          };
+          console.log("payload : ", payload);
+          socket.emit("offer", payload);
+        });
     },
     [activeCall, myMobile, remoteMobile, socket]
   );
 
-  const handleIncomingCallAccept = useCallback(() => {
-    navigator.mediaDevices
-      .getUserMedia({ video: true, audio: true })
-      .then((stream) => {
-        activeCall();
-        userVideo.current.srcObject = stream;
+  const handleSendUserCall = useCallback(
+    async (e) => {
+      e.preventDefault();
+      const strm = await getUserMedia();
+      await sendCall(strm);
+    },
+    [getUserMedia, sendCall]
+  );
+  const acceptCall = useCallback(
+    async (stream) => {
+      activeCall();
+      setCallAnswered(true);
+      userVideo.current.srcObject = stream;
 
-        stream.getTracks().forEach((track) => {
-          peerRef.current.addTrack(track, stream);
-        });
-
-        const desc = new RTCSessionDescription(incomingOffer.sdp);
-
-        peerRef.current
-          .setRemoteDescription(desc)
-          .then(() => {
-            pendingIceCandidates.forEach(async (candidate) => {
-              await peerRef.current
-                .addIceCandidate(candidate)
-                .catch((e) => console.log(e));
-            });
-          })
-          .then(() => {
-            return peerRef.current.createAnswer();
-          })
-          .then((answer) => {
-            return peerRef.current.setLocalDescription(answer);
-          })
-          .then(() => {
-            const payload = {
-              target: incomingOffer.from,
-              from: myMobile,
-              sdp: peerRef.current.localDescription,
-            };
-            socket.emit("answer", payload);
-          });
+      stream.getTracks().forEach((track) => {
+        console.log("stream normal: ", track);
+        peerRef.current.addTrack(track, stream);
       });
-  }, [activeCall, incomingOffer, myMobile, pendingIceCandidates, socket]);
+
+      console.log("incomingOffer : ", incomingOffer);
+
+      const desc = new RTCSessionDescription(incomingOffer.sdp);
+
+      peerRef.current
+        .setRemoteDescription(desc)
+        .then(() => {
+          pendingIceCandidates.forEach(async (candidate) => {
+            await peerRef.current
+              .addIceCandidate(candidate)
+              .catch((e) => console.log(e));
+          });
+        })
+        .then(() => {
+          return peerRef.current.createAnswer();
+        })
+        .then((answer) => {
+          console.log("answer normal : ", answer);
+          return peerRef.current.setLocalDescription(answer);
+        })
+        .then(() => {
+          const payload = {
+            target: incomingOffer.from,
+            from: myMobile,
+            sdp: peerRef.current.localDescription,
+          };
+          socket.emit("answer", payload);
+        });
+    },
+    [activeCall, incomingOffer, myMobile, pendingIceCandidates, socket]
+  );
+
+  const handleIncomingCallAccept = useCallback(async () => {
+    const strm = await getUserMedia();
+    await acceptCall(strm);
+  }, [acceptCall, getUserMedia]);
 
   useEffect(() => {
     socket.on("user-joined", (mb) => {
@@ -170,12 +199,14 @@ function VideoCall({ callActive, setCallActive }) {
       console.log("user joined : ", mb);
     });
 
-    socket.on("offer", (offer) => {
+    socket.on("offer", async (offer) => {
+      console.log("offer come from first : ", offer);
       setIncomingOffer(offer);
       setIsIncomingCall(true);
     });
 
     socket.on("answer", async (answer) => {
+      console.log("call accepted normal : ", answer);
       const desc = new RTCSessionDescription(answer.sdp);
       await peerRef.current
         .setRemoteDescription(desc)
@@ -205,7 +236,14 @@ function VideoCall({ callActive, setCallActive }) {
       socket.off("answer");
       socket.off("ice-candidate");
     };
-  }, [pendingIceCandidates, socket]);
+  }, [
+    callAnswered,
+    handleIncomingCallAccept,
+    myMobile,
+    peerConfig,
+    pendingIceCandidates,
+    socket,
+  ]);
 
   // BottomBar code
 
@@ -217,8 +255,6 @@ function VideoCall({ callActive, setCallActive }) {
 
   const audioInputRef = useRef();
   const videoInputRef = useRef();
-
-  const [currentDeviceId, setCurrentDeviceId] = useState("");
 
   const handleMenuClick = () => {
     setMenuOpen(!menuOpen);
@@ -232,13 +268,7 @@ function VideoCall({ callActive, setCallActive }) {
     e.stopPropagation();
   };
 
-  useEffect(() => {
-    if (callActive && menuOpen) {
-      devices();
-    }
-  }, [callActive, menuOpen]);
-
-  async function devices() {
+  const devices = useCallback(async () => {
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
 
@@ -246,22 +276,54 @@ function VideoCall({ callActive, setCallActive }) {
       audioInputRef.current.innerHTML = "";
       videoInputRef.current.innerHTML = "";
 
+      let firstVideoDeviceId = null;
+
       devices.forEach((d) => {
         const option = document.createElement("option");
         option.classList.add("w-full", "p-2", "rounded", "border");
         option.value = d.deviceId;
-        option.text = d.label || d.deviceId; // Use deviceId as fallback if label is not available
-
+        option.text = d.label || d.deviceId;
         if (d.kind === "audioinput" && audioInputRef.current) {
           audioInputRef.current.appendChild(option);
         } else if (d.kind === "videoinput" && videoInputRef.current) {
+          if (!firstVideoDeviceId) {
+            firstVideoDeviceId = d.deviceId;
+          }
           videoInputRef.current.appendChild(option);
         }
       });
+
+      // Set the selected option to match the current audioOption and videoOption
+      if (audioInputRef.current) {
+        audioInputRef.current.value = audioOption;
+      }
+      if (videoInputRef.current) {
+        videoInputRef.current.value = videoOption;
+      }
     } catch (error) {
       console.log(error);
     }
-  }
+  }, [audioOption, videoOption]);
+
+  useEffect(() => {
+    if (callActive && menuOpen) {
+      devices();
+    }
+  }, [callActive, devices, menuOpen]);
+
+  useEffect(() => {
+    const setDefaultVideoOption = async () => {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const firstVideoDevice = devices.find(
+        (device) => device.kind === "videoinput"
+      );
+      if (firstVideoDevice) {
+        setVideoOption(firstVideoDevice.deviceId);
+      }
+    };
+
+    setDefaultVideoOption();
+  }, []);
 
   const handleVideoToggle = useCallback(() => {
     try {
@@ -291,36 +353,71 @@ function VideoCall({ callActive, setCallActive }) {
 
   const handleSwitchCamera = useCallback(async () => {
     try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoDevices = devices.filter(
-        (device) => device.kind === "videoinput"
-      );
-
-      // If there are multiple video devices, switch to the next one
-      if (videoDevices.length > 1) {
-        const currentIndex = videoDevices.findIndex(
-          (device) => device.deviceId === currentDeviceId
-        );
-        const nextIndex = (currentIndex + 1) % videoDevices.length;
-        const nextDeviceId = videoDevices[nextIndex].deviceId;
-
-        setCurrentDeviceId(nextDeviceId);
-
-        // Stop all video tracks
-        const stream = userVideo.current.srcObject;
-        stream.getVideoTracks().forEach((track) => track.stop());
-
-        // Start the new video track
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: nextDeviceId },
-          audio: true,
-        });
-        userVideo.current.srcObject = newStream;
-      }
+      const video = navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" },
+      });
+      console.log(video);
     } catch (error) {
       console.log(error);
     }
-  }, [currentDeviceId]);
+  }, []);
+
+  const handleAudioInputChange = useCallback(async (e) => {
+    setAudioOption(e.target.value);
+  }, []);
+
+  const handleVideoInputChange = useCallback(
+    async (e) => {
+      try {
+        setVideoOption(e.target.value);
+        const deviceId = e.target.value;
+
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+
+        const constraints = {
+          audio: true,
+          video: { deviceId: deviceId },
+        };
+        const strm = await navigator.mediaDevices.getUserMedia(constraints);
+        setStream(strm);
+        console.log("stream of second camera : ", strm);
+
+        //removing existing tracks
+        peerRef.current.getSenders().forEach((sender) => {
+          console.log("removing tracks of previous one : ", sender);
+          peerRef.current.removeTrack(sender);
+        });
+
+        //getting tracks from stream
+        strm.getTracks().forEach((track) => {
+          console.log("adding stream of switched camera : ", track);
+          peerRef.current.addTrack(track, strm);
+        });
+
+        //creating offer
+        peerRef.current
+          .createOffer()
+          .then((offer) => {
+            console.log("offer of switched camera : ", offer);
+            return peerRef.current.setLocalDescription(offer);
+          })
+          .then(() => {
+            const payload = {
+              target: remoteMobile,
+              from: myMobile,
+              sdp: peerRef.current.localDescription,
+            };
+            console.log("payload of switched camera : ", payload);
+            socket.emit("offer", payload);
+          });
+      } catch (error) {
+        console.log(error);
+      }
+    },
+    [myMobile, remoteMobile, socket, stream]
+  );
 
   return (
     <>
@@ -490,7 +587,7 @@ function VideoCall({ callActive, setCallActive }) {
                               ref={audioInputRef}
                               id="audioInput"
                               value={audioOption}
-                              onChange={(e) => setAudioOption(e.target.value)}
+                              onChange={handleAudioInputChange}
                             ></select>
                           </li>
                           <li>
@@ -500,7 +597,7 @@ function VideoCall({ callActive, setCallActive }) {
                               ref={videoInputRef}
                               id="videoInput"
                               value={videoOption}
-                              onChange={(e) => setVideoOption(e.target.value)}
+                              onChange={handleVideoInputChange}
                             ></select>
                           </li>
                         </ul>
