@@ -84,14 +84,35 @@ function VideoCall({ callActive, setCallActive }) {
     };
 
     peerRef.current.ontrack = (e) => {
-      remoteVideo.current.srcObject = e.streams[0];
+      const remoteStream = remoteVideo.current.srcObject;
+      if (remoteStream) {
+        remoteStream.addTrack(e.track);
+      } else {
+        // If no remote stream exists yet, create a new one with the first track
+        remoteVideo.current.srcObject = new MediaStream([e.track]);
+      }
+    };
+
+    peerRef.current.ondatachannel = (e) => {
+      const dataChannel = e.channel;
+
+      dataChannel.onopen = (e) => {
+        console.log("Data channel is open and ready to be used.", e);
+      };
+
+      dataChannel.onmessage = (event) => {
+        // Parse the track data
+        let trackData = event.data;
+
+        console.log("track data : ", trackData);
+      };
     };
 
     peerRef.current.onconnectionstatechange = (event) => {
       if (peerRef.current.connectionState === "connected") {
         console.log("Peers successfully connected!");
       } else {
-        console.log("Peers connection failed!", event.target.connectionState);
+        console.log("Peers connection failed!", event);
       }
     };
   }, [activeCall, incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
@@ -111,28 +132,32 @@ function VideoCall({ callActive, setCallActive }) {
 
   const sendCall = useCallback(
     async (stream) => {
-      activeCall();
-      userVideo.current.srcObject = stream;
+      try {
+        activeCall();
 
-      stream.getTracks().forEach((track) => {
-        console.log("stream when normal : ", track);
-        peerRef.current.addTrack(track, stream);
-      });
-      peerRef.current
-        .createOffer()
-        .then((offer) => {
-          console.log("offer normal : ", offer);
-          return peerRef.current.setLocalDescription(offer);
-        })
-        .then(() => {
-          const payload = {
-            target: remoteMobile,
-            from: myMobile,
-            sdp: peerRef.current.localDescription,
-          };
-          console.log("payload : ", payload);
-          socket.emit("offer", payload);
-        });
+        userVideo.current.srcObject = stream;
+
+        // Check if the PeerConnection is in a stable state
+        if (peerRef.current.signalingState === "stable") {
+          peerRef.current
+            .createOffer()
+            .then((offer) => {
+              console.log("offer normal : ", offer);
+              return peerRef.current.setLocalDescription(offer);
+            })
+            .then(() => {
+              const payload = {
+                target: remoteMobile,
+                from: myMobile,
+                sdp: peerRef.current.localDescription,
+              };
+              console.log("payload : ", payload);
+              socket.emit("offer", payload);
+            });
+        }
+      } catch (error) {
+        console.log(error);
+      }
     },
     [activeCall, myMobile, remoteMobile, socket]
   );
@@ -141,49 +166,57 @@ function VideoCall({ callActive, setCallActive }) {
     async (e) => {
       e.preventDefault();
       const strm = await getUserMedia();
+      strm.getTracks().forEach((track) => {
+        console.log("adding tracks always : ", track);
+        peerRef.current.addTrack(track, strm);
+      });
       await sendCall(strm);
     },
     [getUserMedia, sendCall]
   );
   const acceptCall = useCallback(
     async (stream) => {
-      activeCall();
-      setCallAnswered(true);
-      userVideo.current.srcObject = stream;
+      try {
+        activeCall();
+        setCallAnswered(true);
+        userVideo.current.srcObject = stream;
 
-      stream.getTracks().forEach((track) => {
-        console.log("stream normal: ", track);
-        peerRef.current.addTrack(track, stream);
-      });
-
-      console.log("incomingOffer : ", incomingOffer);
-
-      const desc = new RTCSessionDescription(incomingOffer.sdp);
-
-      peerRef.current
-        .setRemoteDescription(desc)
-        .then(() => {
-          pendingIceCandidates.forEach(async (candidate) => {
-            await peerRef.current
-              .addIceCandidate(candidate)
-              .catch((e) => console.log(e));
-          });
-        })
-        .then(() => {
-          return peerRef.current.createAnswer();
-        })
-        .then((answer) => {
-          console.log("answer normal : ", answer);
-          return peerRef.current.setLocalDescription(answer);
-        })
-        .then(() => {
-          const payload = {
-            target: incomingOffer.from,
-            from: myMobile,
-            sdp: peerRef.current.localDescription,
-          };
-          socket.emit("answer", payload);
+        stream.getTracks().forEach((track) => {
+          console.log("stream normal: ", track);
+          peerRef.current.addTrack(track, stream);
         });
+
+        console.log("incomingOffer : ", incomingOffer);
+
+        const desc = new RTCSessionDescription(incomingOffer.sdp);
+
+        peerRef.current
+          .setRemoteDescription(desc)
+          .then(() => {
+            pendingIceCandidates.forEach(async (candidate) => {
+              await peerRef.current
+                .addIceCandidate(candidate)
+                .catch((e) => console.log(e));
+            });
+          })
+          .then(() => {
+            return peerRef.current.createAnswer();
+          })
+          .then((answer) => {
+            console.log("answer normal : ", answer);
+            return peerRef.current.setLocalDescription(answer);
+          })
+          .then(() => {
+            const payload = {
+              target: incomingOffer.from,
+              from: myMobile,
+              sdp: peerRef.current.localDescription,
+            };
+            socket.emit("answer", payload);
+          });
+      } catch (error) {
+        console.log(error);
+      }
     },
     [activeCall, incomingOffer, myMobile, pendingIceCandidates, socket]
   );
@@ -203,30 +236,46 @@ function VideoCall({ callActive, setCallActive }) {
       console.log("offer come from first : ", offer);
       setIncomingOffer(offer);
       setIsIncomingCall(true);
+
+      try {
+        if (callAnswered) {
+          console.log("get offer during call : ", offer);
+        }
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     socket.on("answer", async (answer) => {
-      console.log("call accepted normal : ", answer);
-      const desc = new RTCSessionDescription(answer.sdp);
-      await peerRef.current
-        .setRemoteDescription(desc)
-        .catch((e) => console.log(e));
-      pendingIceCandidates.forEach(async (candidate) => {
+      try {
+        console.log("call accepted normal : ", answer);
+        const desc = new RTCSessionDescription(answer.sdp);
         await peerRef.current
-          .addIceCandidate(candidate)
+          .setRemoteDescription(desc)
           .catch((e) => console.log(e));
-      });
-      setPendingIceCandidates([]);
+        pendingIceCandidates.forEach(async (candidate) => {
+          await peerRef.current
+            .addIceCandidate(candidate)
+            .catch((e) => console.log(e));
+        });
+        setPendingIceCandidates([]);
+      } catch (error) {
+        console.log(error);
+      }
     });
 
     socket.on("ice-candidate", async (iceCandidate) => {
-      const candidate = new RTCIceCandidate(iceCandidate);
-      if (peerRef.current.remoteDescription) {
-        await peerRef.current
-          .addIceCandidate(candidate)
-          .catch((e) => console.log(e));
-      } else {
-        setPendingIceCandidates((previous) => [...previous, candidate]);
+      try {
+        const candidate = new RTCIceCandidate(iceCandidate);
+        if (peerRef.current.remoteDescription) {
+          await peerRef.current
+            .addIceCandidate(candidate)
+            .catch((e) => console.log(e));
+        } else {
+          setPendingIceCandidates((previous) => [...previous, candidate]);
+        }
+      } catch (error) {
+        console.log(error);
       }
     });
 
@@ -236,14 +285,7 @@ function VideoCall({ callActive, setCallActive }) {
       socket.off("answer");
       socket.off("ice-candidate");
     };
-  }, [
-    callAnswered,
-    handleIncomingCallAccept,
-    myMobile,
-    peerConfig,
-    pendingIceCandidates,
-    socket,
-  ]);
+  }, [callAnswered, myMobile, pendingIceCandidates, socket]);
 
   // BottomBar code
 
@@ -366,58 +408,58 @@ function VideoCall({ callActive, setCallActive }) {
     setAudioOption(e.target.value);
   }, []);
 
-  const handleVideoInputChange = useCallback(
-    async (e) => {
-      try {
-        setVideoOption(e.target.value);
-        const deviceId = e.target.value;
+  const handleVideoInputChange = useCallback(async (e) => {
+    try {
+      setVideoOption(e.target.value);
+      const deviceId = e.target.value;
 
-        if (stream) {
-          stream.getTracks().forEach((track) => track.stop());
-        }
-
-        const constraints = {
-          audio: true,
-          video: { deviceId: deviceId },
-        };
-        const strm = await navigator.mediaDevices.getUserMedia(constraints);
-        setStream(strm);
-        console.log("stream of second camera : ", strm);
-
-        //removing existing tracks
+      if (peerRef.current) {
         peerRef.current.getSenders().forEach((sender) => {
-          console.log("removing tracks of previous one : ", sender);
-          peerRef.current.removeTrack(sender);
+          if (sender.track) {
+            // Check if the track is not null
+            console.log("removing old track: ", sender.track);
+            sender.track.stop(); // Stop the track
+            peerRef.current.removeTrack(sender); // Remove the track from the peer connection
+          }
         });
-
-        //getting tracks from stream
-        strm.getTracks().forEach((track) => {
-          console.log("adding stream of switched camera : ", track);
-          peerRef.current.addTrack(track, strm);
-        });
-
-        //creating offer
-        peerRef.current
-          .createOffer()
-          .then((offer) => {
-            console.log("offer of switched camera : ", offer);
-            return peerRef.current.setLocalDescription(offer);
-          })
-          .then(() => {
-            const payload = {
-              target: remoteMobile,
-              from: myMobile,
-              sdp: peerRef.current.localDescription,
-            };
-            console.log("payload of switched camera : ", payload);
-            socket.emit("offer", payload);
-          });
-      } catch (error) {
-        console.log(error);
       }
-    },
-    [myMobile, remoteMobile, socket, stream]
-  );
+
+      userVideo.current.srcObject = null;
+      setStream(null);
+
+      const constraints = {
+        audio: true,
+        video: { deviceId: { exact: deviceId } },
+      };
+
+      const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+      setStream(newStream);
+
+      userVideo.current.srcObject = newStream;
+      console.log("stream of second camera : ", newStream);
+
+      // Add the new tracks to the PeerConnection
+      newStream.getTracks().forEach((track) => {
+        peerRef.current.addTrack(track, newStream);
+      });
+
+      //create datachannel
+      const dataChannel = peerRef.current.createDataChannel("chat");
+
+      // Wait for the data channel to open before sending data
+      dataChannel.onopen = () => {
+        dataChannel.send(newStream);
+        console.log("data channel send data : ", newStream);
+      };
+
+      // Handle incoming data
+      dataChannel.onmessage = (event) => {
+        console.log("data channel incoming data : ", event.data);
+      };
+    } catch (error) {
+      console.log(error);
+    }
+  }, []);
 
   return (
     <>

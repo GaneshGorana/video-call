@@ -37,14 +37,17 @@ io.on('connection', (socket) => {
     });
 
     socket.on('offer', (payload) => {
+        console.log('offer payload : ', payload);
         io.to(payload.target).emit('offer', payload);
     });
 
     socket.on('answer', (payload) => {
+        console.log('answer payload : ', payload);
         io.to(payload.target).emit('answer', payload);
     });
 
     socket.on('ice-candidate', (payload) => {
+        console.log('ice-candidate payload : ', payload);
         io.to(payload.target).emit('ice-candidate', payload.candidate);
     });
 
