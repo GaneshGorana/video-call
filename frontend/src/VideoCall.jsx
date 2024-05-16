@@ -6,13 +6,12 @@ import PropTypes from "prop-types";
 import "./Video.css";
 // BottomBar code
 import {
-  CameraIcon,
-  MicrophoneIcon,
-  PhoneIcon,
-  VideoCameraIcon,
-  MenuIcon,
-  XIcon,
-} from "@heroicons/react/solid";
+  FaMicrophone,
+  FaPhone,
+  FaVideo,
+  FaMicrophoneSlash,
+  FaVideoSlash,
+} from "react-icons/fa";
 // eslint-disable-next-line no-unused-vars
 import adapter from "webrtc-adapter";
 
@@ -24,26 +23,25 @@ function VideoCall({ callActive, setCallActive }) {
   const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingOffer, setIncomingOffer] = useState([]);
 
-  const [userMobile, setUserMobile] = useState("");
-  // eslint-disable-next-line no-unused-vars
-  let [stream, setStream] = useState({});
-
-  const [callAnswered, setCallAnswered] = useState(false);
+  const [userMobile, setUserMobile] = useState(
+    localStorage.getItem("myMobile") || null
+  );
 
   const activeCall = useCallback(() => {
     setCallActive(true);
   }, [setCallActive]);
 
   const endCall = useCallback(() => {
+    socket.emit("call-ended", remoteMobile);
     setCallActive(false);
     window.location.reload();
-  }, [setCallActive]);
+  }, [remoteMobile, setCallActive, socket]);
 
   const userVideo = useRef(null);
   const remoteVideo = useRef(null);
 
   const peerRef = useRef(null);
-  const [pendingIceCandidates, setPendingIceCandidates] = useState([]); //ice candidates array
+  const [pendingIceCandidates, setPendingIceCandidates] = useState([]);
 
   const peerConfig = useMemo(
     () => ({
@@ -60,21 +58,13 @@ function VideoCall({ callActive, setCallActive }) {
     []
   );
 
-  const handleUserJoinRoom = useCallback(
-    (e) => {
-      e.preventDefault();
-      socket.emit("join-room", myMobile);
-    },
-    [myMobile, socket]
-  );
-
   useEffect(() => {
     peerRef.current = Peer(peerConfig);
 
     peerRef.current.onicecandidate = (e) => {
       if (e.candidate) {
         const payload = {
-          from: myMobile,
+          from: userMobile,
           target: remoteMobile || incomingOffer.from,
           candidate: e.candidate,
         };
@@ -86,42 +76,40 @@ function VideoCall({ callActive, setCallActive }) {
       remoteVideo.current.srcObject = e.streams[0];
     };
 
-    peerRef.current.ondatachannel = (e) => {
-      const dataChannel = e.channel;
-
-      dataChannel.onopen = (e) => {
-        console.log("Data channel is open and ready to be used.", e);
-      };
-
-      dataChannel.onmessage = (event) => {
-        // Parse the track data
-        let trackData = event.data;
-
-        console.log("track data : ", trackData);
-      };
-    };
-
-    peerRef.current.onnegotiationneeded = (e) => {
-      if (peerRef.current.signalingState != "stable") return;
-      console.log("negotiation needed : ", e);
-    };
-
-    peerRef.current.oniceconnectionstatechange = (e) => {
-      console.log("ice connection state change : ", e);
-    };
-
-    peerRef.current.onicecandidateerror = (e) => {
-      console.log("ice candidate error : ", e);
-    };
-
-    peerRef.current.onconnectionstatechange = (event) => {
+    peerRef.current.onconnectionstatechange = () => {
       if (peerRef.current.connectionState === "connected") {
         console.log("Peers successfully connected!");
       } else {
-        console.log("Peers connection failed!", event);
+        console.log("Peers connection failed!");
       }
     };
-  }, [activeCall, incomingOffer, myMobile, peerConfig, remoteMobile, socket]);
+  }, [
+    activeCall,
+    incomingOffer,
+    myMobile,
+    peerConfig,
+    remoteMobile,
+    socket,
+    userMobile,
+  ]);
+
+  useEffect(() => {
+    if (userMobile) {
+      socket.emit("join-room", userMobile);
+    }
+  }, [socket, userMobile]);
+
+  const handleUserJoinRoom = useCallback(() => {
+    localStorage.setItem("myMobile", myMobile);
+    setUserMobile(myMobile);
+    socket.emit("join-room", myMobile);
+  }, [myMobile, socket]);
+
+  const handleDeleteMobile = () => {
+    localStorage.removeItem("myMobile");
+    setUserMobile(null);
+    handleIncomingCallReject();
+  };
 
   const handleSendUserCall = useCallback(
     (e) => {
@@ -145,7 +133,7 @@ function VideoCall({ callActive, setCallActive }) {
             .then(() => {
               const payload = {
                 target: remoteMobile,
-                from: myMobile,
+                from: userMobile,
                 sdp: peerRef.current.localDescription,
               };
               socket.emit("offer", payload);
@@ -153,7 +141,7 @@ function VideoCall({ callActive, setCallActive }) {
         })
         .catch((e) => console.log(e));
     },
-    [activeCall, myMobile, remoteMobile, socket]
+    [activeCall, remoteMobile, socket, userMobile]
   );
 
   const handleIncomingCallAccept = useCallback(() => {
@@ -162,7 +150,6 @@ function VideoCall({ callActive, setCallActive }) {
       .then((stream) => {
         activeCall();
         userVideo.current.srcObject = stream;
-        setCallAnswered(true);
 
         stream.getTracks().forEach((track) => {
           peerRef.current.addTrack(track, stream);
@@ -187,57 +174,34 @@ function VideoCall({ callActive, setCallActive }) {
           .then(() => {
             const payload = {
               target: incomingOffer.from,
-              from: myMobile,
+              from: userMobile,
               sdp: peerRef.current.localDescription,
             };
             socket.emit("answer", payload);
           });
       });
-  }, [activeCall, incomingOffer, myMobile, pendingIceCandidates, socket]);
+  }, [activeCall, incomingOffer, pendingIceCandidates, socket, userMobile]);
+
+  const handleIncomingCallReject = useCallback(() => {
+    socket.emit("call-rejected", incomingOffer.from);
+    setIncomingOffer([]);
+    setIsIncomingCall(false);
+    setRemoteMobile("");
+  }, [incomingOffer, socket]);
 
   useEffect(() => {
     socket.on("user-joined", (mb) => {
       setUserMobile(mb);
-      console.log("user joined : ", mb);
     });
 
     socket.on("offer", async (offer) => {
       setIncomingOffer(offer);
       setIsIncomingCall(true);
       setRemoteMobile(offer.from);
-      try {
-        if (callAnswered) {
-          console.log("get offer during call : ", offer);
-          const desc = new RTCSessionDescription(offer.sdp);
-          await peerRef.current.setRemoteDescription(desc);
-          if (peerRef.current.remoteDescription) {
-            pendingIceCandidates.forEach(async (candidate) => {
-              await peerRef.current.addIceCandidate(candidate);
-            });
-          }
-          // Check the signaling state before creating an answer
-          if (peerRef.current.signalingState === "have-remote-offer") {
-            const answer = await peerRef.current.createAnswer();
-            await peerRef.current.setLocalDescription(answer);
-
-            const payload = {
-              target: offer.from,
-              from: myMobile,
-              sdp: peerRef.current.localDescription,
-            };
-            socket.emit("answer", payload);
-
-            setPendingIceCandidates([]);
-          }
-        }
-      } catch (error) {
-        console.log(error);
-      }
     });
 
     socket.on("answer", async (answer) => {
       try {
-        console.log("call accepted : ", answer);
         const desc = new RTCSessionDescription(answer.sdp);
         await peerRef.current
           .setRemoteDescription(desc)
@@ -268,93 +232,34 @@ function VideoCall({ callActive, setCallActive }) {
       }
     });
 
+    socket.on("call-rejected", () => {
+      console.log(`Call Rejected by : ${remoteMobile}`);
+      alert(`Call Rejected by : ${remoteMobile}`);
+      setCallActive(false);
+      window.location.reload();
+    });
+
+    socket.on("call-ended", () => {
+      console.log(`Call Ended by : ${remoteMobile}`);
+      alert(`Call Ended by : ${remoteMobile}`);
+      setCallActive(false);
+      window.location.reload();
+    });
+
     return () => {
       socket.off("user-joined");
       socket.off("offer");
       socket.off("answer");
       socket.off("ice-candidate");
+      socket.off("call-rejected");
+      socket.off("call-ended");
     };
-  }, [callAnswered, myMobile, pendingIceCandidates, socket]);
+  }, [pendingIceCandidates, remoteMobile, setCallActive, socket]);
 
   // BottomBar code
 
   const [micMuted, setMicMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
-  const [audioOption, setAudioOption] = useState("default");
-  const [videoOption, setVideoOption] = useState("default");
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const audioInputRef = useRef();
-  const videoInputRef = useRef();
-
-  const handleMenuClick = () => {
-    setMenuOpen(!menuOpen);
-  };
-
-  const handleCloseClick = () => {
-    setMenuOpen(false);
-  };
-
-  const handleMenuItemClick = (e) => {
-    e.stopPropagation();
-  };
-
-  const devices = useCallback(async () => {
-    try {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-
-      // Clear existing options
-      audioInputRef.current.innerHTML = "";
-      videoInputRef.current.innerHTML = "";
-
-      let firstVideoDeviceId = null;
-
-      devices.forEach((d) => {
-        const option = document.createElement("option");
-        option.classList.add("w-full", "p-2", "rounded", "border");
-        option.value = d.deviceId;
-        option.text = d.label || d.deviceId;
-        if (d.kind === "audioinput" && audioInputRef.current) {
-          audioInputRef.current.appendChild(option);
-        } else if (d.kind === "videoinput" && videoInputRef.current) {
-          if (!firstVideoDeviceId) {
-            firstVideoDeviceId = d.deviceId;
-          }
-          videoInputRef.current.appendChild(option);
-        }
-      });
-
-      // Set the selected option to match the current audioOption and videoOption
-      if (audioInputRef.current) {
-        audioInputRef.current.value = audioOption;
-      }
-      if (videoInputRef.current) {
-        videoInputRef.current.value = videoOption;
-      }
-    } catch (error) {
-      console.log(error);
-    }
-  }, [audioOption, videoOption]);
-
-  useEffect(() => {
-    if (callActive && menuOpen) {
-      devices();
-    }
-  }, [callActive, devices, menuOpen]);
-
-  useEffect(() => {
-    const setDefaultVideoOption = async () => {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      const firstVideoDevice = devices.find(
-        (device) => device.kind === "videoinput"
-      );
-      if (firstVideoDevice) {
-        setVideoOption(firstVideoDevice.deviceId);
-      }
-    };
-
-    setDefaultVideoOption();
-  }, []);
 
   const handleVideoToggle = useCallback(() => {
     try {
@@ -382,75 +287,6 @@ function VideoCall({ callActive, setCallActive }) {
     }
   }, [micMuted]);
 
-  const handleSwitchCamera = useCallback(async () => {
-    try {
-      const video = navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" },
-      });
-      console.log(video);
-    } catch (error) {
-      console.log(error);
-    }
-  }, []);
-
-  const handleAudioInputChange = useCallback(async (e) => {
-    setAudioOption(e.target.value);
-  }, []);
-
-  const handleVideoInputChange = useCallback(
-    async (e) => {
-      try {
-        setVideoOption(e.target.value);
-        const deviceId = e.target.value;
-
-        const constraints = {
-          audio: true,
-          video: { deviceId: { exact: deviceId } },
-        };
-
-        const newStream = await navigator.mediaDevices.getUserMedia(
-          constraints
-        );
-        setStream(newStream);
-
-        userVideo.current.srcObject = newStream;
-        console.log("stream of second camera : ", newStream);
-
-        if (peerRef.current) {
-          const senders = peerRef.current.getSenders();
-
-          newStream.getTracks().forEach((track, index) => {
-            if (senders[index]) {
-              // Replace the old track with the new one
-              senders[index].replaceTrack(track);
-            } else {
-              // Add the new track
-              peerRef.current.addTrack(track, newStream);
-            }
-          });
-
-          // Manually trigger the negotiation process
-          if (peerRef.current.signalingState == "stable") {
-            const offer = await peerRef.current.createOffer();
-            await peerRef.current.setLocalDescription(offer);
-
-            const payload = {
-              target: remoteMobile,
-              from: myMobile,
-              sdp: peerRef.current.localDescription,
-            };
-            socket.emit("offer", payload);
-
-            console.log("new offer sent : ", payload);
-          }
-        }
-      } catch (error) {
-        console.log(error);
-      }
-    },
-    [myMobile, remoteMobile, socket]
-  );
-
   return (
     <>
       {callActive != true ? (
@@ -459,7 +295,7 @@ function VideoCall({ callActive, setCallActive }) {
           className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4 sm:px-6 lg:px-8"
         >
           <form
-            onSubmit={handleUserJoinRoom}
+            onSubmit={(e) => e.preventDefault()}
             className="w-full p-6 m-3 bg-white rounded shadow-md"
           >
             <label
@@ -468,19 +304,36 @@ function VideoCall({ callActive, setCallActive }) {
             >
               Your mobile number
             </label>
+            {userMobile && (
+              <h1 className="m-3 text-lg font-medium text-gray-700">
+                User joined : {userMobile}
+              </h1>
+            )}
             <input
               type="number"
               id="mymb"
               value={myMobile}
               onChange={(e) => setMyMobile(e.target.value)}
+              disabled={!!userMobile}
               className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
             />
-            <button
-              type="submit"
-              className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
-            >
-              Join
-            </button>
+            {userMobile ? (
+              <button
+                onClick={handleDeleteMobile}
+                type="button"
+                className="w-full px-4 py-2 font-bold text-white bg-red-500 rounded-full hover:bg-red-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+              >
+                Delete Your Number
+              </button>
+            ) : (
+              <button
+                onClick={handleUserJoinRoom}
+                type="submit"
+                className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+              >
+                Join
+              </button>
+            )}
           </form>
           <form
             onSubmit={handleSendUserCall}
@@ -499,15 +352,13 @@ function VideoCall({ callActive, setCallActive }) {
               onChange={(e) => setRemoteMobile(e.target.value)}
               className="w-full px-3 py-2 mb-3 text-sm leading-tight text-gray-700 border rounded shadow appearance-none focus:outline-none focus:shadow-outline"
             />
-            <button className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out">
+            <button
+              disabled={isIncomingCall}
+              className="w-full px-4 py-2 font-bold text-white bg-blue-500 rounded-full hover:bg-blue-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+            >
               Call
             </button>
           </form>
-          {userMobile && (
-            <h1 className="m-3 text-lg font-medium text-gray-700">
-              User joined : {userMobile}
-            </h1>
-          )}
           {isIncomingCall && (
             <div className="w-full p-6 m-3 bg-white rounded shadow-md">
               <h1 className="mb-2 text-lg font-medium text-gray-700">
@@ -518,6 +369,13 @@ function VideoCall({ callActive, setCallActive }) {
                 className="w-full px-4 py-2 font-bold text-white bg-green-500 rounded-full hover:bg-green-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
               >
                 Accept
+              </button>
+              <button
+                onClick={handleIncomingCallReject}
+                type="button"
+                className="w-full px-4 py-2 font-bold text-white bg-red-500 rounded-full hover:bg-red-700 focus:outline-none focus:shadow-outline transition duration-200 ease-in-out"
+              >
+                Reject
               </button>
             </div>
           )}
@@ -543,7 +401,7 @@ function VideoCall({ callActive, setCallActive }) {
           />
         </div>
 
-        {/* this is BottomBar of call */}
+        {/* BottomBar of call */}
 
         {callActive && (
           <>
@@ -553,91 +411,30 @@ function VideoCall({ callActive, setCallActive }) {
                 className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
                 title="Mic Toggle"
               >
-                {!micMuted ? (
-                  <XIcon className="h-6 w-6" />
+                {micMuted ? (
+                  <FaMicrophoneSlash className="h-6 w-6 text-red-500" />
                 ) : (
-                  <MicrophoneIcon className="h-6 w-6" />
+                  <FaMicrophone className="h-6 w-6 text-white" />
                 )}
-              </button>
-              <button
-                onClick={handleSwitchCamera}
-                className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
-                title="Switch Camera"
-              >
-                <CameraIcon className="h-6 w-6" />
               </button>
               <button
                 onClick={endCall}
                 className="p-2 rounded-full bg-red-600 hover:bg-red-500"
                 title="End Call"
               >
-                <PhoneIcon className="h-6 w-6" />
+                <FaPhone className="h-6 w-6" />
               </button>
               <button
                 onClick={() => handleVideoToggle()}
                 className="p-2 rounded-full bg-gray-700 hover:bg-gray-600"
                 title="Camera Toggle"
               >
-                {!cameraOff ? (
-                  <XIcon className="h-6 w-6" />
+                {cameraOff ? (
+                  <FaVideoSlash className="h-6 w-6 text-red-500" />
                 ) : (
-                  <VideoCameraIcon className="h-6 w-6" />
+                  <FaVideo className="h-6 w-6 text-white" />
                 )}
               </button>
-              <div className="relative">
-                <button
-                  onClick={handleMenuClick}
-                  className="p-2 rounded bg-blue-500 text-white"
-                  title="Settings"
-                >
-                  <MenuIcon className="h-6 w-6" />
-                </button>
-
-                {menuOpen && (
-                  <div
-                    onClick={handleCloseClick}
-                    className="fixed inset-0 z-10"
-                  >
-                    <div className="absolute inset-0 bg-black opacity-50"></div>
-                    <div className="fixed inset-0 flex items-center justify-center z-20">
-                      <div
-                        className="bg-white p-4 rounded shadow-lg w-full sm:w-80 max-w-xs relative overflow-auto max-h-60"
-                        onClick={handleMenuItemClick}
-                      >
-                        <button
-                          onClick={handleCloseClick}
-                          className="absolute top-0 right-0 p-2"
-                          title="Close"
-                        >
-                          <XIcon className="h-6 w-6 text-black" />
-                        </button>
-                        <ul className="space-y-2 text-black">
-                          <li>
-                            <p className="font-bold">Audio Input</p>
-                            <select
-                              className="w-full p-2 rounded border"
-                              ref={audioInputRef}
-                              id="audioInput"
-                              value={audioOption}
-                              onChange={handleAudioInputChange}
-                            ></select>
-                          </li>
-                          <li>
-                            <p className="font-bold">Video Input</p>
-                            <select
-                              className="w-full p-2 rounded border"
-                              ref={videoInputRef}
-                              id="videoInput"
-                              value={videoOption}
-                              onChange={handleVideoInputChange}
-                            ></select>
-                          </li>
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
             </div>
           </>
         )}
