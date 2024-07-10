@@ -9,7 +9,7 @@ export const useSocket = () => {
   return socket;
 };
 export const SocketProvider = (props) => {
-  const socket = useMemo(() => io(import.meta.env.VITE_BACKEND_ORIGIN_URL), []);
+  const socket = useMemo(() => io("https://video-call-u7te.onrender.com"), []);
 
   return (
     <SocketContext.Provider value={socket}>
