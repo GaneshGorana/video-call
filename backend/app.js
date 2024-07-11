@@ -24,12 +24,10 @@ io.on('connection', (socket) => {
         io.to(mb).emit('user-joined', mb);
     });
     socket.on('offer', (payload) => {
-        console.log('offer payload : ', payload);
         io.to(payload.target).emit('offer', payload);
     });
 
     socket.on('answer', (payload) => {
-        console.log('answer payload : ', payload);
         io.to(payload.target).emit('answer', payload);
     });
 
@@ -45,9 +43,9 @@ io.on('connection', (socket) => {
         io.to(mb).emit('call-rejected', mb);
     });
 
-    socket.on('disconnect', () => {
-        console.log('user disconnected');
-    });
+    // socket.on('disconnect', () => {
+    //     console.log('user disconnected');
+    // });
 
 });
 
