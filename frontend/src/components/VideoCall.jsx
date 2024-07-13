@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import "./App.css";
-import { useSocket } from "../context/SocketProvider";
-import Peer from "./utils/Peer.js";
+import "../App.css";
+import { useSocket } from "../../context/SocketProvider.jsx";
+import Peer from "../utils/Peer.js";
 import PropTypes from "prop-types";
-import "./Video.css";
+import "../styles/Video.css";
 // BottomBar code
 import {
   FaMicrophone,
@@ -12,6 +12,7 @@ import {
   FaMicrophoneSlash,
   FaVideoSlash,
 } from "react-icons/fa";
+// eslint-disable-next-line no-unused-vars
 import adapter from "webrtc-adapter";
 
 import {
@@ -21,6 +22,7 @@ import {
   TextField,
   Typography,
   IconButton,
+  Box,
 } from "@mui/material";
 
 function VideoCall({ callActive, setCallActive }) {
@@ -418,37 +420,43 @@ function VideoCall({ callActive, setCallActive }) {
               <Typography variant="h6" component="h1" className="mb-2">
                 Incoming Call from : {incomingOffer.from}
               </Typography>
-              <Button
-                onClick={handleIncomingCallAccept}
-                variant="contained"
-                sx={{
-                  backgroundColor: "green",
-                  color: "white",
-                  "&:hover": {
-                    backgroundColor: "darkgreen",
-                  },
-                }}
-                fullWidth
-                className="transition duration-200 ease-in-out mb-2"
-              >
-                Accept
-              </Button>
-              <Button
-                onClick={handleIncomingCallReject}
-                type="button"
-                variant="contained"
-                sx={{
-                  backgroundColor: "red",
-                  color: "white",
-                  "&:hover": {
-                    backgroundColor: "darkred",
-                  },
-                }}
-                fullWidth
-                className="transition duration-200 ease-in-out"
-              >
-                Reject
-              </Button>
+              <Box className="w-full mt-3 flex flex-col sm:flex-row justify-center items-center gap-8">
+                <Button
+                  onClick={handleIncomingCallAccept}
+                  variant="contained"
+                  sx={{
+                    backgroundColor: "green",
+                    color: "white",
+                    "&:hover": {
+                      backgroundColor: "darkgreen",
+                    },
+                    borderRadius: "9999px", // Make the button circular
+                    padding: "12px 48px", // Increase the size of the button
+                  }}
+                  className="w-auto transition duration-200 ease-in-out mb-2 sm:mb-0 text-lg" // Adjust text size for bigger buttons
+                >
+                  Accept
+                  <FaPhone className="ml-2" />
+                </Button>
+                <Button
+                  onClick={handleIncomingCallReject}
+                  variant="contained"
+                  type="button"
+                  sx={{
+                    backgroundColor: "red",
+                    color: "white",
+                    "&:hover": {
+                      backgroundColor: "darkred",
+                    },
+                    borderRadius: "9999px", // Make the button circular
+                    padding: "12px 48px", // Increase the size of the button
+                  }}
+                  className="w-auto transition duration-200 ease-in-out text-lg" // Adjust text size for bigger buttons
+                >
+                  Reject
+                  <FaPhone className="ml-2" />
+                </Button>
+              </Box>
             </Paper>
           )}
         </Container>

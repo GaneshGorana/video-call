@@ -4,7 +4,8 @@ import Home from "./Home";
 import VideoCall from "./VideoCall";
 import Intoduction from "./Introduction";
 import HowToUse from "./HowToUse";
-import About from "./About";
+import AboutMe from "./AboutMe";
+import Footer from "./Footer";
 
 function DefaultPage() {
   const [callActive, setCallActive] = useState(false);
@@ -15,7 +16,8 @@ function DefaultPage() {
       {!callActive && <Intoduction />}
       {!callActive && <HowToUse />}
       <VideoCall callActive={callActive} setCallActive={setCallActive} />
-      {!callActive && <About />}
+      {!callActive && <AboutMe />}
+      {!callActive && <Footer />}
     </>
   );
 }

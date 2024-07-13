@@ -1,9 +1,9 @@
 import { Container, Box, Typography, Link } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
-import { FaEnvelope, FaFacebook, FaInstagram } from "react-icons/fa";
+import { FaEnvelope, FaFacebook, FaGithub, FaInstagram } from "react-icons/fa";
 
-const About = () => {
+const AboutMe = () => {
   const theme = useTheme();
   const isXs = useMediaQuery(theme.breakpoints.down("sm"));
   const isSm = useMediaQuery(theme.breakpoints.between("sm", "md"));
@@ -107,6 +107,13 @@ const About = () => {
               >
                 <FaInstagram size={24} />
               </Link>
+              <Link
+                href="https://www.github.com/GaneshGorana"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <FaGithub size={24} />
+              </Link>
             </Box>
           </Box>
           <Box
@@ -130,4 +137,4 @@ const About = () => {
   );
 };
 
-export default About;
+export default AboutMe;
