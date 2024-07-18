@@ -2,6 +2,11 @@ import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
 import { configDotenv } from 'dotenv';
+import connectDB from './db/connection.js';
+import userRoutes from "./routes/user.js"
+
+import cors from 'cors';
+
 configDotenv();
 
 const app = express();
@@ -9,12 +14,18 @@ const PORT = 8181;
 
 const server = http.createServer(app);
 
+app.use(cors())
+
+connectDB();
+
 const io = new Server(server, {
     cors: {
         origin: process.env.FRONTEND_ORIGIN_URL,
         credentials: true
     }
 });
+
+app.use('/', userRoutes)
 
 io.on('connection', (socket) => {
     console.log('a user connected : ', socket.id);

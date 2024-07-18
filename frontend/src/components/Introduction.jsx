@@ -1,4 +1,3 @@
-/* eslint-disable react/no-unescaped-entities */
 import { Container, Box, Typography } from "@mui/material";
 import { useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";

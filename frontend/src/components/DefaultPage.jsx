@@ -9,6 +9,7 @@ import Footer from "./Footer";
 
 function DefaultPage() {
   const [callActive, setCallActive] = useState(false);
+
   return (
     <>
       {!callActive && <NavigationBar />}

@@ -12,7 +12,7 @@ import {
   FaMicrophoneSlash,
   FaVideoSlash,
 } from "react-icons/fa";
-// eslint-disable-next-line no-unused-vars
+
 import adapter from "webrtc-adapter";
 
 import {
@@ -25,27 +25,44 @@ import {
   Box,
 } from "@mui/material";
 
+import axios from "axios";
+import CustomAlertBox from "./CustomAlertBox.jsx";
+
 function VideoCall({ callActive, setCallActive }) {
   const socket = useSocket();
 
   const [myMobile, setMyMobile] = useState("");
+  const [myPassKey, setMyPassKey] = useState("");
   const [remoteMobile, setRemoteMobile] = useState("");
   const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingOffer, setIncomingOffer] = useState([]);
 
+  const [dialogData, setDialogData] = useState({});
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [dialogError, setDialogError] = useState({});
+  const [friendData, setFriendData] = useState({});
+  const [friendError, setFriendError] = useState({});
+  const [deleteRoomId, setDeleteRoomId] = useState("");
+
   const [userMobile, setUserMobile] = useState(
     localStorage.getItem("myMobile") || null
+  );
+  const [userPassKey, setUserPassKey] = useState(
+    localStorage.getItem("myPassKey") || null
   );
 
   const activeCall = useCallback(() => {
     setCallActive(true);
   }, [setCallActive]);
 
-  const endCall = useCallback(() => {
+  const endCall = useCallback(async () => {
     socket.emit("call-ended", remoteMobile);
     setCallActive(false);
+    await axios.post(
+      `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+    );
     window.location.reload();
-  }, [remoteMobile, setCallActive, socket]);
+  }, [remoteMobile, setCallActive, socket, userMobile]);
 
   const userVideo = useRef(null);
   const remoteVideo = useRef(null);
@@ -86,15 +103,28 @@ function VideoCall({ callActive, setCallActive }) {
       remoteVideo.current.srcObject = e.streams[0];
     };
 
-    peerRef.current.onconnectionstatechange = () => {
+    peerRef.current.onconnectionstatechange = async () => {
       if (peerRef.current.connectionState === "connected") {
         console.log("Peers successfully connected!");
+
+        try {
+          await axios.post(
+            `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/inCall/${userMobile}`
+          );
+        } catch (error) {
+          console.log(error);
+        }
       } else {
-        console.log("Peers connection failed!");
+        try {
+          console.log("Peers connection failed!");
+        } catch (error) {
+          console.log(error);
+        }
       }
     };
   }, [
     activeCall,
+    friendData.inCall,
     incomingOffer,
     myMobile,
     peerConfig,
@@ -109,21 +139,78 @@ function VideoCall({ callActive, setCallActive }) {
     }
   }, [socket, userMobile]);
 
-  const handleUserJoinRoom = useCallback(() => {
+  const handleUserJoinRoom = useCallback(async () => {
     localStorage.setItem("myMobile", myMobile);
+    localStorage.setItem("myPassKey", myPassKey);
     setUserMobile(myMobile);
+    setUserPassKey(myPassKey);
     socket.emit("join-room", myMobile);
-  }, [myMobile, socket]);
 
-  const handleDeleteMobile = () => {
+    try {
+      const { data } = await axios.post(
+        `${
+          import.meta.env.VITE_BACKEND_ORIGIN_URL
+        }/createRoom/${myMobile}/${myPassKey}`
+      );
+
+      if (data) setDialogData(data);
+    } catch (error) {
+      console.log(error?.response?.data);
+      setDialogError(error?.response?.data);
+      if (error?.response?.data?.success == false) {
+        setUserMobile(null);
+        setUserPassKey(null);
+      }
+    }
+    setIsDialogOpen(true);
+  }, [myMobile, myPassKey, socket]);
+
+  const handleDeleteMobile = async () => {
     localStorage.removeItem("myMobile");
+    localStorage.removeItem("myPassKey");
     setUserMobile(null);
+    setUserPassKey(null);
+    setDialogData({});
+    setDialogError({});
     handleIncomingCallReject();
+
+    try {
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/deleteRoom/${userMobile}`
+      );
+
+      if (!data) return;
+
+      setDeleteRoomId(data);
+      setIsDialogOpen(true);
+    } catch (error) {
+      console.log(error?.response?.data);
+    }
   };
 
   const handleSendUserCall = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault();
+
+      setIsDialogOpen(true);
+      try {
+        const { data } = await axios.post(
+          `${
+            import.meta.env.VITE_BACKEND_ORIGIN_URL
+          }/friendCall/${remoteMobile}`
+        );
+
+        if (data) setFriendData(data);
+
+        if (data.inCall) {
+          setRemoteMobile("");
+          return;
+        }
+      } catch (error) {
+        console.log(error?.response?.data);
+        setFriendError(error?.response?.data);
+        return;
+      }
 
       navigator.mediaDevices
         .getUserMedia({ video: true, audio: true })
@@ -249,10 +336,13 @@ function VideoCall({ callActive, setCallActive }) {
       window.location.reload();
     });
 
-    socket.on("call-ended", () => {
+    socket.on("call-ended", async () => {
       console.log(`Call Ended by : ${remoteMobile}`);
       alert(`Call Ended by : ${remoteMobile}`);
       setCallActive(false);
+      await axios.post(
+        `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+      );
       window.location.reload();
     });
 
@@ -264,7 +354,7 @@ function VideoCall({ callActive, setCallActive }) {
       socket.off("call-rejected");
       socket.off("call-ended");
     };
-  }, [pendingIceCandidates, remoteMobile, setCallActive, socket]);
+  }, [pendingIceCandidates, remoteMobile, setCallActive, socket, userMobile]);
 
   // BottomBar code
 
@@ -300,74 +390,183 @@ function VideoCall({ callActive, setCallActive }) {
   return (
     <>
       {callActive != true ? (
-        <Container
-          id="service-section"
-          className="flex flex-col items-center justify-center min-h-screen"
-          maxWidth="md"
-        >
-          <Typography
-            variant="h3"
-            margin={"1.3rem 0"}
-            textAlign={"center"}
-            fontWeight={"bold"}
+        <>
+          {isDialogOpen && (
+            <>
+              {dialogData.newCreated && (
+                <CustomAlertBox
+                  description="User room created and joined successfully."
+                  isOpen={isDialogOpen}
+                  text="Ok"
+                  title="User Room"
+                  onClose={() => {}}
+                />
+              )}
+              {dialogData.alreayExists && (
+                <CustomAlertBox
+                  description="User room already exists, joined in."
+                  isOpen={isDialogOpen}
+                  text="Ok"
+                  title="User Room"
+                  onClose={() => {}}
+                />
+              )}
+              {dialogError.success == false && (
+                <CustomAlertBox
+                  description={`${dialogError.message}`}
+                  isOpen={isDialogOpen}
+                  text="Ok"
+                  title="User Room Error"
+                  onClose={() => {}}
+                />
+              )}
+              {friendData.inCall && (
+                <CustomAlertBox
+                  description={`${friendData.message}`}
+                  isOpen={isDialogOpen}
+                  text="Ok"
+                  title="Friend Call"
+                  onClose={() => setFriendData({})}
+                />
+              )}
+              {friendError.success == false && (
+                <CustomAlertBox
+                  description={`${friendError.message}`}
+                  isOpen={isDialogOpen}
+                  text="Ok"
+                  title="Friend Call Error"
+                  onClose={() => setFriendError({})}
+                />
+              )}
+              {deleteRoomId.success == true && (
+                <CustomAlertBox
+                  description={`${deleteRoomId.message}`}
+                  isOpen={isDialogOpen}
+                  text="Ok"
+                  title="User Room"
+                  onClose={() => {
+                    setDeleteRoomId({});
+                    setIsDialogOpen(false);
+                  }}
+                />
+              )}
+            </>
+          )}
+          <Container
+            id="service-section"
+            className="flex flex-col items-center justify-center min-h-screen"
+            maxWidth="md"
           >
-            Let&apos;s Start
-          </Typography>
-          <Paper elevation={3} className="w-full p-6 m-3">
             <Typography
-              variant="h6"
-              component="label"
-              htmlFor="mymb"
-              className="block mb-2"
+              variant="h3"
+              margin={"1.3rem 0"}
+              textAlign={"center"}
+              fontWeight={"bold"}
             >
-              Create Room ID
+              Let&apos;s Start
             </Typography>
-            {userMobile ? (
+            <Paper elevation={3} className="w-full p-6 m-3">
               <Typography
-                variant="span"
-                margin={"0.4rem 0"}
+                variant="h6"
+                component="label"
+                htmlFor="mymb"
                 className="block mb-2"
               >
-                You Joined : {userMobile}
+                Create Room ID
               </Typography>
-            ) : (
-              ""
-            )}
-            <TextField
-              type="number"
-              id="mymb"
-              value={myMobile}
-              onChange={(e) => setMyMobile(e.target.value)}
-              disabled={!!userMobile}
-              variant="outlined"
-              fullWidth
-              margin="normal"
-            />
-            {userMobile ? (
-              <Button
-                onClick={handleDeleteMobile}
-                type="button"
-                variant="contained"
+              {userMobile ? (
+                <Typography
+                  variant="span"
+                  margin={"0.4rem 0"}
+                  className="block mb-2"
+                >
+                  You Joined : {userMobile}
+                </Typography>
+              ) : (
+                ""
+              )}
+              <TextField
+                type="number"
+                id="mymb"
+                value={myMobile ? myMobile : ""}
+                onChange={(e) => setMyMobile(e.target.value)}
+                disabled={!!userMobile}
+                variant="outlined"
                 fullWidth
-                sx={{
-                  backgroundColor: "red",
-                  color: "white",
-                  "&:hover": {
-                    backgroundColor: "darkred",
-                  },
-                }}
-                className="transition duration-200 ease-in-out"
+                margin="normal"
+                label={"Enter Your Room ID"}
+              />
+              <TextField
+                type="number"
+                id="mymb"
+                value={myPassKey ? myPassKey : ""}
+                onChange={(e) => setMyPassKey(e.target.value)}
+                disabled={!!userPassKey}
+                variant="outlined"
+                fullWidth
+                margin="normal"
+                label={"Enter Your Room Pass-Key"}
+              />
+              {userMobile ? (
+                <Button
+                  onClick={handleDeleteMobile}
+                  type="button"
+                  variant="contained"
+                  fullWidth
+                  sx={{
+                    backgroundColor: "red",
+                    color: "white",
+                    "&:hover": {
+                      backgroundColor: "darkred",
+                    },
+                  }}
+                  className="transition duration-200 ease-in-out"
+                >
+                  Delete Your ID
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleUserJoinRoom}
+                  type="submit"
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  className="transition duration-200 ease-in-out"
+                  sx={{
+                    backgroundColor: "black",
+                    color: "white",
+                    "&:hover": {
+                      backgroundColor: "blue",
+                    },
+                  }}
+                >
+                  Join
+                </Button>
+              )}
+            </Paper>
+            <Paper elevation={3} className="w-full p-6 m-3">
+              <Typography
+                variant="h6"
+                component="label"
+                htmlFor="remotemb"
+                className="block mb-2"
               >
-                Delete Your ID
-              </Button>
-            ) : (
-              <Button
-                onClick={handleUserJoinRoom}
-                type="submit"
-                variant="contained"
-                color="primary"
+                Friend Room ID
+              </Typography>
+              <TextField
+                type="number"
+                id="remotemb"
+                value={remoteMobile}
+                onChange={(e) => setRemoteMobile(e.target.value)}
+                variant="outlined"
                 fullWidth
-                className="transition duration-200 ease-in-out"
+                margin="normal"
+                label={"Enter Friend Room ID"}
+              />
+              <Button
+                onClick={handleSendUserCall}
+                disabled={isIncomingCall}
+                variant="contained"
                 sx={{
                   backgroundColor: "black",
                   color: "white",
@@ -375,91 +574,58 @@ function VideoCall({ callActive, setCallActive }) {
                     backgroundColor: "blue",
                   },
                 }}
+                fullWidth
+                className="transition duration-200 ease-in-out"
               >
-                Join
+                Call
               </Button>
-            )}
-          </Paper>
-          <Paper elevation={3} className="w-full p-6 m-3">
-            <Typography
-              variant="h6"
-              component="label"
-              htmlFor="remotemb"
-              className="block mb-2"
-            >
-              Friend Room ID
-            </Typography>
-            <TextField
-              type="number"
-              id="remotemb"
-              value={remoteMobile}
-              onChange={(e) => setRemoteMobile(e.target.value)}
-              variant="outlined"
-              fullWidth
-              margin="normal"
-            />
-            <Button
-              onClick={handleSendUserCall}
-              disabled={isIncomingCall}
-              variant="contained"
-              sx={{
-                backgroundColor: "black",
-                color: "white",
-                "&:hover": {
-                  backgroundColor: "blue",
-                },
-              }}
-              fullWidth
-              className="transition duration-200 ease-in-out"
-            >
-              Call
-            </Button>
-          </Paper>
-          {isIncomingCall && (
-            <Paper elevation={3} className="w-full p-6 m-3">
-              <Typography variant="h6" component="h1" className="mb-2">
-                Incoming Call from : {incomingOffer.from}
-              </Typography>
-              <Box className="w-full mt-3 flex flex-col sm:flex-row justify-center items-center gap-8">
-                <Button
-                  onClick={handleIncomingCallAccept}
-                  variant="contained"
-                  sx={{
-                    backgroundColor: "green",
-                    color: "white",
-                    "&:hover": {
-                      backgroundColor: "darkgreen",
-                    },
-                    borderRadius: "9999px", // Make the button circular
-                    padding: "12px 48px", // Increase the size of the button
-                  }}
-                  className="w-auto transition duration-200 ease-in-out mb-2 sm:mb-0 text-lg" // Adjust text size for bigger buttons
-                >
-                  Accept
-                  <FaPhone className="ml-2" />
-                </Button>
-                <Button
-                  onClick={handleIncomingCallReject}
-                  variant="contained"
-                  type="button"
-                  sx={{
-                    backgroundColor: "red",
-                    color: "white",
-                    "&:hover": {
-                      backgroundColor: "darkred",
-                    },
-                    borderRadius: "9999px", // Make the button circular
-                    padding: "12px 48px", // Increase the size of the button
-                  }}
-                  className="w-auto transition duration-200 ease-in-out text-lg" // Adjust text size for bigger buttons
-                >
-                  Reject
-                  <FaPhone className="ml-2" />
-                </Button>
-              </Box>
             </Paper>
-          )}
-        </Container>
+            {isIncomingCall && (
+              <Paper elevation={3} className="w-full p-6 m-3">
+                <Typography variant="h6" component="h1" className="mb-2">
+                  Incoming Call from : {incomingOffer.from}
+                </Typography>
+                <Box className="w-full mt-3 flex flex-col sm:flex-row justify-center items-center gap-8">
+                  <Button
+                    onClick={handleIncomingCallAccept}
+                    variant="contained"
+                    sx={{
+                      backgroundColor: "green",
+                      color: "white",
+                      "&:hover": {
+                        backgroundColor: "darkgreen",
+                      },
+                      borderRadius: "9999px", // Make the button circular
+                      padding: "12px 48px", // Increase the size of the button
+                    }}
+                    className="w-auto transition duration-200 ease-in-out mb-2 sm:mb-0 text-lg" // Adjust text size for bigger buttons
+                  >
+                    Accept
+                    <FaPhone className="ml-2" />
+                  </Button>
+                  <Button
+                    onClick={handleIncomingCallReject}
+                    variant="contained"
+                    type="button"
+                    sx={{
+                      backgroundColor: "red",
+                      color: "white",
+                      "&:hover": {
+                        backgroundColor: "darkred",
+                      },
+                      borderRadius: "9999px", // Make the button circular
+                      padding: "12px 48px", // Increase the size of the button
+                    }}
+                    className="w-auto transition duration-200 ease-in-out text-lg" // Adjust text size for bigger buttons
+                  >
+                    Reject
+                    <FaPhone className="ml-2" />
+                  </Button>
+                </Box>
+              </Paper>
+            )}
+          </Container>
+        </>
       ) : (
         <></>
       )}
