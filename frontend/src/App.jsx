@@ -1,4 +1,4 @@
-// eslint-disable-next-line no-unused-vars
+/* eslint-disable no-unused-vars */
 import adapter from "webrtc-adapter";
 import {
   Route,
@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 import DefaultPage from "./components/DefaultPage.jsx";
 import AssetsAttribution from "./components/AssetsAttribution.jsx";
+import FaqPage from "./components/FaqPage.jsx";
 
 function App() {
   const router = createBrowserRouter(
@@ -18,6 +19,7 @@ function App() {
           path="/assets-attribution"
           element={<AssetsAttribution />}
         ></Route>
+        <Route path="/faq" element={<FaqPage />} />
       </>
     )
   );

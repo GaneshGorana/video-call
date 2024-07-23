@@ -1,25 +1,33 @@
-import { useState } from "react";
-import NavigationBar from "./NavigationBar";
-import Home from "./Home";
-import VideoCall from "./VideoCall";
-import Intoduction from "./Introduction";
-import HowToUse from "./HowToUse";
-import AboutMe from "./AboutMe";
-import Footer from "./Footer";
+import { CircularProgress } from "@mui/material";
+import { lazy, Suspense, useState } from "react";
+
+const NavigationBar = lazy(() => import("./NavigationBar"));
+const Home = lazy(() => import("./Home"));
+const VideoCall = lazy(() => import("./VideoCall"));
+const Introduction = lazy(() => import("./Introduction"));
+const HowToUse = lazy(() => import("./HowToUse"));
+const AboutMe = lazy(() => import("./AboutMe"));
+const Footer = lazy(() => import("./Footer"));
 
 function DefaultPage() {
   const [callActive, setCallActive] = useState(false);
 
   return (
-    <>
+    <Suspense
+      fallback={
+        <div className="flex justify-center items-center h-screen">
+          <CircularProgress className="text-blue-500" />
+        </div>
+      }
+    >
       {!callActive && <NavigationBar />}
       {!callActive && <Home />}
-      {!callActive && <Intoduction />}
+      {!callActive && <Introduction />}
       {!callActive && <HowToUse />}
       <VideoCall callActive={callActive} setCallActive={setCallActive} />
       {!callActive && <AboutMe />}
       {!callActive && <Footer />}
-    </>
+    </Suspense>
   );
 }
 

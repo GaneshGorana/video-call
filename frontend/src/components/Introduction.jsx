@@ -79,6 +79,7 @@ function Intoduction() {
             maxWidth: "400px",
             order: 1,
           }}
+          loading="lazy"
         />
       </Box>
     </Container>

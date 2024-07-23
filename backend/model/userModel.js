@@ -13,7 +13,15 @@ const userSchema = new mongoose.Schema({
     inCall: {
         type: Boolean,
         default: false
-    }
+    },
+    isLogged: {
+        type: Boolean,
+        default: false
+    },
+    haveInComingCall: {
+        type: Boolean,
+        default: false
+    },
 
 }, {
     timestamps: true

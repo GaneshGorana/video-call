@@ -118,6 +118,7 @@ const AboutMe = () => {
           </Box>
           <Box
             component="img"
+            loading="lazy"
             src="https://ik.imagekit.io/imgUpload/videocall_assests/author.jpg"
             alt="Ganesh Gorana"
             title="Ganesh Gorana"

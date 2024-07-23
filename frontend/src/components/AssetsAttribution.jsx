@@ -9,6 +9,7 @@ const AssetsAttribution = () => {
               className="w-full h-48 object-cover"
               src="https://ik.imagekit.io/imgUpload/videocall_assests/two.jpg"
               alt="Beautiful Landscape"
+              loading="lazy"
             />
             <div className="mt-4">
               <p className="text-gray-700 text-base">
@@ -29,6 +30,7 @@ const AssetsAttribution = () => {
               className="w-full h-48 object-cover"
               src="https://ik.imagekit.io/imgUpload/videocall_assests/three.jpg"
               alt="Beautiful Landscape"
+              loading="lazy"
             />
             <div className="mt-4">
               <p className="text-gray-700 text-base">Image by vecteezy.com</p>
@@ -47,6 +49,7 @@ const AssetsAttribution = () => {
               className="w-full h-48 object-cover"
               src="https://ik.imagekit.io/imgUpload/videocall_assests/one.jpg"
               alt="Beautiful Landscape"
+              loading="lazy"
             />
             <div className="mt-4">
               <p className="text-gray-700 text-base">Image by freepik.com</p>
@@ -65,6 +68,7 @@ const AssetsAttribution = () => {
               className="w-full h-48 object-cover"
               src="https://ik.imagekit.io/imgUpload/videocall_assests/how-we.jpg"
               alt="Beautiful Landscape"
+              loading="lazy"
             />
             <div className="mt-4">
               <p className="text-gray-700 text-base">Image by freepik.com</p>

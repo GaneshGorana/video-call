@@ -76,6 +76,12 @@ function HowToUse() {
               sx={{ textAlign: "left" }}
             />
           </ListItem>
+          <ListItem>
+            <ListItemText
+              primary="Tip : Refer FAQ section for more details."
+              sx={{ textAlign: "left" }}
+            />
+          </ListItem>
         </List>
       </Box>
     </Container>

@@ -11,13 +11,10 @@ function Footer() {
             letterSpacing: "0.05rem",
             fontWeight: "bold",
           }}
+          className="text-center mt-8 text-sm text-gray-600"
         >
-          <b>
-            <p className="text-center mt-8 text-sm text-gray-600">
-              Copyright © Assets and materials are property of their respective
-              authors. Links to the authors are provided.
-            </p>
-          </b>
+          Copyright © Assets and materials are property of their respective
+          authors. Links to the authors are provided.
         </Typography>
       </Box>
     </Container>

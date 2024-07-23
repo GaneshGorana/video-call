@@ -13,6 +13,7 @@ import {
   FaVideoSlash,
 } from "react-icons/fa";
 
+// eslint-disable-next-line no-unused-vars
 import adapter from "webrtc-adapter";
 
 import {
@@ -37,12 +38,12 @@ function VideoCall({ callActive, setCallActive }) {
   const [isIncomingCall, setIsIncomingCall] = useState(false);
   const [incomingOffer, setIncomingOffer] = useState([]);
 
-  const [dialogData, setDialogData] = useState({});
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [dialogError, setDialogError] = useState({});
-  const [friendData, setFriendData] = useState({});
-  const [friendError, setFriendError] = useState({});
-  const [deleteRoomId, setDeleteRoomId] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [checkRoomData, setCheckRoomData] = useState({});
+  const [userJoinData, setUserJoinData] = useState({});
+  const [userMobileRemoveData, setUserMobileRemoveData] = useState({});
+  const [friendJoinData, setFriendJoinData] = useState({});
+  const [userMobileDeleteData, setUserMobileDeleteData] = useState({});
 
   const [userMobile, setUserMobile] = useState(
     localStorage.getItem("myMobile") || null
@@ -57,11 +58,19 @@ function VideoCall({ callActive, setCallActive }) {
 
   const endCall = useCallback(async () => {
     socket.emit("call-ended", remoteMobile);
-    setCallActive(false);
-    await axios.post(
-      `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
-    );
     window.location.reload();
+    setCallActive(false);
+    try {
+      await axios.post(
+        `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+      );
+    } catch (error) {
+      console.log(error?.response?.data?.message);
+    }
+
+    return () => {
+      socket.off("call-ended");
+    };
   }, [remoteMobile, setCallActive, socket, userMobile]);
 
   const userVideo = useRef(null);
@@ -84,6 +93,27 @@ function VideoCall({ callActive, setCallActive }) {
     }),
     []
   );
+
+  // useEffect(() => {
+  //   const handleBeforeUnload = async (event) => {
+  //     socket.emit("call-ended", remoteMobile);
+  //     try {
+  //       navigator.sendBeacon(
+  //         `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+  //       );
+  //     } catch (error) {
+  //       console.error("Error sending status updates on window close", error);
+  //     }
+  //     event.returnValue = "";
+  //   };
+
+  //   window.addEventListener("beforeunload", handleBeforeUnload);
+
+  //   return () => {
+  //     socket.off("call-ended");
+  //     window.removeEventListener("beforeunload", handleBeforeUnload);
+  //   };
+  // }, [remoteMobile, socket, userMobile]);
 
   useEffect(() => {
     peerRef.current = Peer(peerConfig);
@@ -112,7 +142,7 @@ function VideoCall({ callActive, setCallActive }) {
             `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/inCall/${userMobile}`
           );
         } catch (error) {
-          console.log(error);
+          console.log(error?.response?.data?.message);
         }
       } else {
         try {
@@ -122,9 +152,12 @@ function VideoCall({ callActive, setCallActive }) {
         }
       }
     };
+
+    return () => {
+      socket.off("ice-candidate");
+    };
   }, [
     activeCall,
-    friendData.inCall,
     incomingOffer,
     myMobile,
     peerConfig,
@@ -133,19 +166,12 @@ function VideoCall({ callActive, setCallActive }) {
     userMobile,
   ]);
 
-  useEffect(() => {
-    if (userMobile) {
-      socket.emit("join-room", userMobile);
-    }
-  }, [socket, userMobile]);
-
   const handleUserJoinRoom = useCallback(async () => {
-    localStorage.setItem("myMobile", myMobile);
-    localStorage.setItem("myPassKey", myPassKey);
-    setUserMobile(myMobile);
-    setUserPassKey(myPassKey);
-    socket.emit("join-room", myMobile);
-
+    setDialogOpen(true);
+    if (!myMobile || !myPassKey) {
+      alert("Please enter your Room ID and Pass-Key.");
+      return;
+    }
     try {
       const { data } = await axios.post(
         `${
@@ -153,25 +179,64 @@ function VideoCall({ callActive, setCallActive }) {
         }/createRoom/${myMobile}/${myPassKey}`
       );
 
-      if (data) setDialogData(data);
-    } catch (error) {
-      console.log(error?.response?.data);
-      setDialogError(error?.response?.data);
-      if (error?.response?.data?.success == false) {
+      if (!data) return;
+
+      if (data?.alreayExists || data?.newCreated) {
+        socket.emit("join-room", myMobile);
+      }
+
+      if (data?.isLogged) {
+        setUserJoinData(data);
+
+        localStorage.removeItem("myMobile");
+        localStorage.removeItem("myPassKey");
         setUserMobile(null);
         setUserPassKey(null);
+        setMyMobile(null);
+        setMyPassKey(null);
+        return;
+      } else {
+        localStorage.setItem("myMobile", myMobile);
+        localStorage.setItem("myPassKey", myPassKey);
+        setUserMobile(myMobile);
+        setUserPassKey(myPassKey);
+        setDialogOpen(true);
+        setUserJoinData(data);
       }
+    } catch (error) {
+      setUserJoinData(error?.response?.data);
     }
-    setIsDialogOpen(true);
+    return () => {
+      socket.off("join-room");
+    };
   }, [myMobile, myPassKey, socket]);
+
+  const handleRemoveMobile = useCallback(async () => {
+    try {
+      const { data } = await axios.post(
+        `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/logout/${userMobile}`
+      );
+      if (!data) return;
+
+      localStorage.removeItem("myMobile");
+      localStorage.removeItem("myPassKey");
+      setUserMobile(null);
+      setUserPassKey(null);
+      setMyMobile(null);
+      setMyPassKey(null);
+
+      setDialogOpen(true);
+      setUserMobileRemoveData(data);
+    } catch (error) {
+      setUserMobileRemoveData(error?.response?.data);
+    }
+  }, [userMobile]);
 
   const handleDeleteMobile = async () => {
     localStorage.removeItem("myMobile");
     localStorage.removeItem("myPassKey");
     setUserMobile(null);
     setUserPassKey(null);
-    setDialogData({});
-    setDialogError({});
     handleIncomingCallReject();
 
     try {
@@ -181,34 +246,48 @@ function VideoCall({ callActive, setCallActive }) {
 
       if (!data) return;
 
-      setDeleteRoomId(data);
-      setIsDialogOpen(true);
+      setDialogOpen(true);
+      setUserMobileDeleteData(data);
     } catch (error) {
-      console.log(error?.response?.data);
+      setUserMobileDeleteData(error?.response?.data);
     }
   };
 
   const handleSendUserCall = useCallback(
     async (e) => {
       e.preventDefault();
-
-      setIsDialogOpen(true);
+      setDialogOpen(true);
+      if (!remoteMobile) {
+        alert("Please enter your Room ID.");
+        return;
+      }
+      if (!userMobile || !userPassKey) {
+        alert("Please enter your Room ID and Pass-Key.");
+        return;
+      }
       try {
+        if (userMobile == remoteMobile) {
+          setFriendJoinData({
+            inCall: true,
+            message: "You can't call yourself!",
+          });
+          setRemoteMobile("");
+          return;
+        }
+
         const { data } = await axios.post(
           `${
             import.meta.env.VITE_BACKEND_ORIGIN_URL
           }/friendCall/${remoteMobile}`
         );
+        setFriendJoinData(data);
 
-        if (data) setFriendData(data);
-
-        if (data.inCall) {
+        if (data.inCall || data.haveInComingCall) {
           setRemoteMobile("");
           return;
         }
       } catch (error) {
-        console.log(error?.response?.data);
-        setFriendError(error?.response?.data);
+        setFriendJoinData(error?.response?.data);
         return;
       }
 
@@ -237,11 +316,14 @@ function VideoCall({ callActive, setCallActive }) {
             });
         })
         .catch((e) => console.log(e));
+      return () => {
+        socket.off("offer");
+      };
     },
-    [activeCall, remoteMobile, socket, userMobile]
+    [activeCall, myMobile, myPassKey, remoteMobile, socket, userMobile]
   );
 
-  const handleIncomingCallAccept = useCallback(() => {
+  const handleIncomingCallAccept = useCallback(async () => {
     navigator.mediaDevices
       .getUserMedia({ video: true, audio: true })
       .then((stream) => {
@@ -277,21 +359,78 @@ function VideoCall({ callActive, setCallActive }) {
             socket.emit("answer", payload);
           });
       });
+    try {
+      await axios.post(
+        `${
+          import.meta.env.VITE_BACKEND_ORIGIN_URL
+        }/resetIncomingCall/${userMobile}`
+      );
+    } catch (error) {
+      console.log(error?.response?.data?.message);
+    }
+    return () => {
+      socket.off("answer");
+    };
   }, [activeCall, incomingOffer, pendingIceCandidates, socket, userMobile]);
 
-  const handleIncomingCallReject = useCallback(() => {
+  const handleIncomingCallReject = useCallback(async () => {
     socket.emit("call-rejected", incomingOffer.from);
     setIncomingOffer([]);
     setIsIncomingCall(false);
     setRemoteMobile("");
-  }, [incomingOffer, socket]);
+    try {
+      await axios.post(
+        `${
+          import.meta.env.VITE_BACKEND_ORIGIN_URL
+        }/resetIncomingCall/${userMobile}`
+      );
+    } catch (error) {
+      console.log(error?.response?.data?.message);
+    }
+  }, [incomingOffer.from, socket, userMobile]);
+
+  useEffect(() => {
+    if (userMobile && userPassKey) {
+      socket.emit("join-room", userMobile);
+    }
+    return () => {
+      socket.off("join-room");
+    };
+  }, [socket, userMobile, userPassKey]);
+
+  useEffect(() => {
+    (async function () {
+      if (isIncomingCall) {
+        try {
+          await axios.post(
+            `${
+              import.meta.env.VITE_BACKEND_ORIGIN_URL
+            }/incomingCall/${userMobile}`
+          );
+        } catch (error) {
+          console.log(error?.response?.data?.message);
+        }
+      } else {
+        try {
+          await axios.post(
+            `${
+              import.meta.env.VITE_BACKEND_ORIGIN_URL
+            }/resetIncomingCall/${userMobile}`
+          );
+        } catch (error) {
+          console.log(error?.response?.data?.message);
+        }
+      }
+    })();
+  }, [isIncomingCall, userMobile]);
 
   useEffect(() => {
     socket.on("user-joined", (mb) => {
-      setUserMobile(mb);
+      console.log(`User Joined : ${mb}`);
     });
 
     socket.on("offer", async (offer) => {
+      console.log(`Offer from : ${offer.from}`);
       setIncomingOffer(offer);
       setIsIncomingCall(true);
       setRemoteMobile(offer.from);
@@ -329,21 +468,32 @@ function VideoCall({ callActive, setCallActive }) {
       }
     });
 
-    socket.on("call-rejected", () => {
+    socket.on("call-rejected", async () => {
+      window.location.reload();
       console.log(`Call Rejected by : ${remoteMobile}`);
       alert(`Call Rejected by : ${remoteMobile}`);
       setCallActive(false);
-      window.location.reload();
+      try {
+        await axios.post(
+          `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+        );
+      } catch (error) {
+        console.log(error?.response?.data?.message);
+      }
     });
 
     socket.on("call-ended", async () => {
-      console.log(`Call Ended by : ${remoteMobile}`);
-      alert(`Call Ended by : ${remoteMobile}`);
-      setCallActive(false);
-      await axios.post(
-        `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
-      );
       window.location.reload();
+      console.log(`Call Ended by : ${remoteMobile}`);
+      if (remoteMobile) alert(`Call Ended by : ${remoteMobile}`);
+      setCallActive(false);
+      try {
+        await axios.post(
+          `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+        );
+      } catch (error) {
+        console.log(error?.response?.data?.message);
+      }
     });
 
     return () => {
@@ -354,7 +504,14 @@ function VideoCall({ callActive, setCallActive }) {
       socket.off("call-rejected");
       socket.off("call-ended");
     };
-  }, [pendingIceCandidates, remoteMobile, setCallActive, socket, userMobile]);
+  }, [
+    pendingIceCandidates,
+    remoteMobile,
+    setCallActive,
+    socket,
+    userJoinData,
+    userMobile,
+  ]);
 
   // BottomBar code
 
@@ -391,62 +548,163 @@ function VideoCall({ callActive, setCallActive }) {
     <>
       {callActive != true ? (
         <>
-          {isDialogOpen && (
+          {dialogOpen && (
             <>
-              {dialogData.newCreated && (
+              {checkRoomData.roomExists == false && (
                 <CustomAlertBox
-                  description="User room created and joined successfully."
-                  isOpen={isDialogOpen}
-                  text="Ok"
-                  title="User Room"
-                  onClose={() => {}}
-                />
-              )}
-              {dialogData.alreayExists && (
-                <CustomAlertBox
-                  description="User room already exists, joined in."
-                  isOpen={isDialogOpen}
-                  text="Ok"
-                  title="User Room"
-                  onClose={() => {}}
-                />
-              )}
-              {dialogError.success == false && (
-                <CustomAlertBox
-                  description={`${dialogError.message}`}
-                  isOpen={isDialogOpen}
-                  text="Ok"
-                  title="User Room Error"
-                  onClose={() => {}}
-                />
-              )}
-              {friendData.inCall && (
-                <CustomAlertBox
-                  description={`${friendData.message}`}
-                  isOpen={isDialogOpen}
-                  text="Ok"
-                  title="Friend Call"
-                  onClose={() => setFriendData({})}
-                />
-              )}
-              {friendError.success == false && (
-                <CustomAlertBox
-                  description={`${friendError.message}`}
-                  isOpen={isDialogOpen}
-                  text="Ok"
-                  title="Friend Call Error"
-                  onClose={() => setFriendError({})}
-                />
-              )}
-              {deleteRoomId.success == true && (
-                <CustomAlertBox
-                  description={`${deleteRoomId.message}`}
-                  isOpen={isDialogOpen}
-                  text="Ok"
-                  title="User Room"
+                  title={"User Room Error"}
+                  description={`${checkRoomData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
                   onClose={() => {
-                    setDeleteRoomId({});
-                    setIsDialogOpen(false);
+                    setDialogOpen(false);
+                    setCheckRoomData({});
+                  }}
+                />
+              )}
+              {userJoinData.newCreated == true && (
+                <CustomAlertBox
+                  title={"User Room"}
+                  description={`${userJoinData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    {
+                      setDialogOpen(false);
+                      setUserJoinData({});
+                    }
+                  }}
+                />
+              )}
+              {userJoinData.alreayExists == true && (
+                <CustomAlertBox
+                  title={"User Room"}
+                  description={`${userJoinData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserJoinData({});
+                  }}
+                />
+              )}
+              {userJoinData.isLogged == true && (
+                <CustomAlertBox
+                  title={"User Room Warning"}
+                  description={`${userJoinData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserJoinData({});
+                  }}
+                />
+              )}
+              {userJoinData.success == false && (
+                <CustomAlertBox
+                  title={"User Room Error"}
+                  description={`${userJoinData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserJoinData({});
+                  }}
+                />
+              )}
+              {userMobileRemoveData.isAlreadyLoggedOut && (
+                <CustomAlertBox
+                  title={"User Room Warning"}
+                  description={`${userMobileRemoveData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserMobileRemoveData({});
+                  }}
+                />
+              )}
+              {userMobileRemoveData.isAlreadyLoggedOut == false && (
+                <CustomAlertBox
+                  title={"User Room Warning"}
+                  description={`${userMobileRemoveData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserMobileRemoveData({});
+                  }}
+                />
+              )}
+              {userMobileRemoveData.success == false && (
+                <CustomAlertBox
+                  title={"User Room Remove Error"}
+                  description={`${userMobileRemoveData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserMobileRemoveData({});
+                  }}
+                />
+              )}
+              {friendJoinData.inCall && (
+                <CustomAlertBox
+                  title={"Room Warning"}
+                  description={`${friendJoinData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setFriendJoinData({});
+                  }}
+                />
+              )}
+              {friendJoinData.haveInComingCall && (
+                <CustomAlertBox
+                  title={"Room Warning"}
+                  description={`Your friend have another incoming call, try again later.`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setFriendJoinData({});
+                  }}
+                />
+              )}
+              {friendJoinData.success == false && (
+                <CustomAlertBox
+                  title={"Friend Room Error"}
+                  description={`${friendJoinData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setFriendJoinData({});
+                  }}
+                />
+              )}
+              {userMobileDeleteData.roomDeleted && (
+                <CustomAlertBox
+                  title={"User Room Warning"}
+                  description={`${userMobileDeleteData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserMobileDeleteData({});
+                  }}
+                />
+              )}
+              {userMobileDeleteData.success == false && (
+                <CustomAlertBox
+                  title={"User Room Warning"}
+                  description={`${userMobileDeleteData.message}`}
+                  text={"Ok"}
+                  isOpen={dialogOpen}
+                  onClose={() => {
+                    setDialogOpen(false);
+                    setUserMobileDeleteData({});
                   }}
                 />
               )}
@@ -492,38 +750,60 @@ function VideoCall({ callActive, setCallActive }) {
                 onChange={(e) => setMyMobile(e.target.value)}
                 disabled={!!userMobile}
                 variant="outlined"
+                required
                 fullWidth
                 margin="normal"
                 label={"Enter Your Room ID"}
               />
               <TextField
                 type="number"
-                id="mymb"
+                id="mymp"
                 value={myPassKey ? myPassKey : ""}
                 onChange={(e) => setMyPassKey(e.target.value)}
                 disabled={!!userPassKey}
                 variant="outlined"
+                required
                 fullWidth
                 margin="normal"
                 label={"Enter Your Room Pass-Key"}
               />
               {userMobile ? (
-                <Button
-                  onClick={handleDeleteMobile}
-                  type="button"
-                  variant="contained"
-                  fullWidth
-                  sx={{
-                    backgroundColor: "red",
-                    color: "white",
-                    "&:hover": {
-                      backgroundColor: "darkred",
-                    },
-                  }}
-                  className="transition duration-200 ease-in-out"
-                >
-                  Delete Your ID
-                </Button>
+                <>
+                  <Button
+                    onClick={handleRemoveMobile}
+                    type="submit"
+                    variant="contained"
+                    fullWidth
+                    sx={{
+                      backgroundColor: "red",
+                      color: "white",
+                      mt: 1,
+                      mb: 2,
+                      "&:hover": {
+                        backgroundColor: "darkred",
+                      },
+                    }}
+                    className="transition duration-200 ease-in-out"
+                  >
+                    Remove ID
+                  </Button>
+                  <Button
+                    onClick={handleDeleteMobile}
+                    type="submit"
+                    variant="contained"
+                    fullWidth
+                    sx={{
+                      backgroundColor: "red",
+                      color: "white",
+                      "&:hover": {
+                        backgroundColor: "darkred",
+                      },
+                    }}
+                    className="transition duration-200 ease-in-out"
+                  >
+                    Delete Your ID
+                  </Button>
+                </>
               ) : (
                 <Button
                   onClick={handleUserJoinRoom}
@@ -559,6 +839,7 @@ function VideoCall({ callActive, setCallActive }) {
                 value={remoteMobile}
                 onChange={(e) => setRemoteMobile(e.target.value)}
                 variant="outlined"
+                required
                 fullWidth
                 margin="normal"
                 label={"Enter Friend Room ID"}
@@ -595,10 +876,10 @@ function VideoCall({ callActive, setCallActive }) {
                       "&:hover": {
                         backgroundColor: "darkgreen",
                       },
-                      borderRadius: "9999px", // Make the button circular
-                      padding: "12px 48px", // Increase the size of the button
+                      borderRadius: "9999px",
+                      padding: "12px 48px",
                     }}
-                    className="w-auto transition duration-200 ease-in-out mb-2 sm:mb-0 text-lg" // Adjust text size for bigger buttons
+                    className="w-auto transition duration-200 ease-in-out mb-2 sm:mb-0 text-lg"
                   >
                     Accept
                     <FaPhone className="ml-2" />
@@ -677,6 +958,7 @@ function VideoCall({ callActive, setCallActive }) {
                   backgroundColor: "darkred",
                 },
                 transform: "rotate(225deg)",
+                cursor: "pointer",
               }}
             >
               <FaPhone className="h-6 w-6" />

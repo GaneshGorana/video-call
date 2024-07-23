@@ -9,7 +9,9 @@ export const useSocket = () => {
   return socket;
 };
 export const SocketProvider = (props) => {
-  const socket = useMemo(() => io(import.meta.env.VITE_BACKEND_ORIGIN_URL), []);
+  const socket = useMemo(() => {
+    return io(import.meta.env.VITE_BACKEND_ORIGIN_URL);
+  }, []);
 
   return (
     <SocketContext.Provider value={socket}>

@@ -28,8 +28,6 @@ const io = new Server(server, {
 app.use('/', userRoutes)
 
 io.on('connection', (socket) => {
-    console.log('a user connected : ', socket.id);
-
     socket.on('join-room', (mb) => {
         socket.join(mb);
         io.to(mb).emit('user-joined', mb);
@@ -53,10 +51,6 @@ io.on('connection', (socket) => {
     socket.on('call-rejected', (mb) => {
         io.to(mb).emit('call-rejected', mb);
     });
-
-    // socket.on('disconnect', () => {
-    //     console.log('user disconnected');
-    // });
 
 });
 
