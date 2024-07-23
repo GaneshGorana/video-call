@@ -7,9 +7,14 @@ function Footer() {
         <Typography
           variant="h3"
           sx={{
-            marginBottom: "1.5rem",
+            margin: "0px 0px 1.5rem",
+            fontFamily: "Roboto Helvetica Arial sans-serif",
+            fontSize: "0.9rem",
+            lineHeight: "1.167",
             letterSpacing: "0.05rem",
-            fontWeight: "bold",
+            fontWeight: "700",
+            wordWrap: "break-word",
+            wordBreak: "auto-phrase",
           }}
           className="text-center mt-8 text-sm text-gray-600"
         >
