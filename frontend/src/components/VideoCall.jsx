@@ -94,26 +94,26 @@ function VideoCall({ callActive, setCallActive }) {
     []
   );
 
-  // useEffect(() => {
-  //   const handleBeforeUnload = async (event) => {
-  //     socket.emit("call-ended", remoteMobile);
-  //     try {
-  //       navigator.sendBeacon(
-  //         `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
-  //       );
-  //     } catch (error) {
-  //       console.error("Error sending status updates on window close", error);
-  //     }
-  //     event.returnValue = "";
-  //   };
+  useEffect(() => {
+    const handleBeforeUnload = async (event) => {
+      socket.emit("call-ended", remoteMobile);
+      try {
+        navigator.sendBeacon(
+          `${import.meta.env.VITE_BACKEND_ORIGIN_URL}/outCall/${userMobile}`
+        );
+      } catch (error) {
+        console.error("Error sending status updates on window close", error);
+      }
+      event.returnValue = "";
+    };
 
-  //   window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("beforeunload", handleBeforeUnload);
 
-  //   return () => {
-  //     socket.off("call-ended");
-  //     window.removeEventListener("beforeunload", handleBeforeUnload);
-  //   };
-  // }, [remoteMobile, socket, userMobile]);
+    return () => {
+      socket.off("call-ended");
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+    };
+  }, [remoteMobile, socket, userMobile]);
 
   useEffect(() => {
     peerRef.current = Peer(peerConfig);
